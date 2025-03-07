@@ -1,0 +1,3 @@
+编写XXX
+然后告诉我在cocos Create2d中需要做什么
+然后将你的修改更新到readme.md中

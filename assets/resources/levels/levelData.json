@@ -1,0 +1,58 @@
+{
+  "levels": [
+    {
+      "id": 1,
+      "name": "初级训练营",
+      "description": "适合新手玩家，学习基本操作和策略",
+      "difficulty": 1,
+      "unlocked": true,
+      "developed": true,
+      "imgPath": "levels/images/level1"
+    },
+    {
+      "id": 2,
+      "name": "边境之战",
+      "description": "在边境地区与敌军展开对抗，注意地形利用",
+      "difficulty": 2,
+      "unlocked": true,
+      "developed": false,
+      "imgPath": "levels/images/level2"
+    },
+    {
+      "id": 3,
+      "name": "山地遭遇战",
+      "description": "在复杂地形中与敌人作战，充分利用高地优势",
+      "difficulty": 3,
+      "unlocked": true,
+      "developed": false,
+      "imgPath": "levels/images/level3"
+    },
+    {
+      "id": 4,
+      "name": "城市攻防战",
+      "description": "在城市环境中作战，建筑物为您提供掩护",
+      "difficulty": 3,
+      "unlocked": false,
+      "developed": false,
+      "imgPath": "levels/images/level4"
+    },
+    {
+      "id": 5,
+      "name": "要塞突袭",
+      "description": "突袭敌方要塞，消灭敌军指挥官",
+      "difficulty": 4,
+      "unlocked": false,
+      "developed": false,
+      "imgPath": "levels/images/level5"
+    },
+    {
+      "id": 6,
+      "name": "决战之地",
+      "description": "与敌军主力决战，这是最终的挑战",
+      "difficulty": 5,
+      "unlocked": false,
+      "developed": false,
+      "imgPath": "levels/images/level6"
+    }
+  ]
+} 
