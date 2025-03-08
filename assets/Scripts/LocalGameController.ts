@@ -656,9 +656,10 @@ export class LocalGameController extends Component {
         // 获取当前玩家ID
         const currentPlayerId = this._playerManager.getCurrentPlayer()?.id ?? -1;
         
-        // 计算派遣兵力（默认一半，但不少于1，不超过源格子兵力-1）
+        // 计算派遣兵力（源格子兵力-1）
         const availableTroops = Math.max(0, startTile.troops - 1); // 保留1个兵力在原地
-        const troopsToSend = Math.min(Math.floor(startTile.troops / 2), availableTroops);
+        //const troopsToSend = Math.min(Math.floor(startTile.troops / 2), availableTroops);
+        const troopsToSend = availableTroops;
         
         if (troopsToSend <= 0) {
             console.error(`in LocalGameController: 派遣模式：起始格子兵力不足，当前兵力${startTile.troops}`);
@@ -668,14 +669,14 @@ export class LocalGameController extends Component {
         
         console.log(`in LocalGameController: 派遣模式：从 [${startPos.x},${startPos.y}] 派遣 ${troopsToSend} 兵力`);
         
-        // 创建行军路径
+        // 创建行军路径，这里会调用TroopManager的createMarchingPath方法
         this._troopManager.createMarchingPath(
             currentPlayerId,
             startPos,
             finalPath.slice(1), // 移除起始点，因为它在createMarchingPath中会被单独处理
             troopsToSend
         );
-        
+        console.log(`in LocalGameController: 派遣模式：创建行军路径完成`);
         // 清除派遣模式状态
         this._isInDispatchMode = false;
         this._dispatchPath = [];

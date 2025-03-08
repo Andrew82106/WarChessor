@@ -66,7 +66,8 @@ export class TroopManager extends Component {
         troops: number
     ): boolean {
         console.log(`in TroopManager: 创建行军路径: 玩家${playerId}从[${sourceTile.x},${sourceTile.y}]出发, 目标数量${targetTiles.length}, 分配兵力${troops}`);
-        
+        //输出行军路径
+        console.log(`in TroopManager: 行军路径: ${JSON.stringify(targetTiles)}`);
         if (!this._mapManager) {
             console.error("in TroopManager: 地图管理器未设置，无法创建行军路径");
             return false;
@@ -120,120 +121,92 @@ export class TroopManager extends Component {
      * 每回合调用一次，推进所有行军路径的进度
      */
     processMarchingQueues(): void {
-        //console.log(`in TroopManager: 处理行军队列，当前有 ${this._marchingPaths.length} 条路径`);
-        
+        // 如果没有行军路径或地图管理器未初始化，直接返回
         if (this._marchingPaths.length === 0 || !this._mapManager) return;
         
-        // 获取第一条行军路径（当前正在执行的）
+        // 获取当前行军路径（队列中的第一条）
         const currentPath = this._marchingPaths[0];
-        console.log(`in TroopManager: 处理行军路径: 玩家 ${currentPath.playerId}, 当前步骤 ${currentPath.currentStep}/${currentPath.targetTiles.length}, 分配兵力 ${currentPath.assignedTroops}`);
         
-        // 如果是第一步，标记行军路径已分配兵力，但尚未从源格子减少兵力
-        if (currentPath.currentStep === 0 && currentPath.assignedTroops === 0) {
-            const sourceTile = this._mapManager.getTile(currentPath.sourceTile.x, currentPath.sourceTile.y);
-            
-            if (sourceTile && sourceTile.ownerId === currentPath.playerId) {
-                // 确认源格子仍属于该玩家并有足够兵力
-                // 确保源格子至少有2个兵力（1个用于留守，其余用于行军）
-                if (sourceTile.troops >= 2) {
-                    // 计算可派遣的兵力数量，但暂不减少源格子兵力
-                    const troopsToSend = Math.min(currentPath.troops, sourceTile.troops - 1);
-                    
-                    // 标记已分配兵力
-                    currentPath.assignedTroops = troopsToSend;
-                    
-                    console.log(`in TroopManager: 行军开始，从 [${currentPath.sourceTile.x},${currentPath.sourceTile.y}] 准备派出 ${troopsToSend} 兵力`);
-                } else {
-                    // 兵力不足，取消行军
-                    console.log(`in TroopManager: 起始格子兵力不足(${sourceTile.troops})，需要至少2个兵力才能行军，取消行军路径`);
-                    this._marchingPaths.shift();
-                    return this.processMarchingQueues(); // 递归处理下一条路径
-                }
-            } else {
-                // 源格子不再属于该玩家，取消行军
-                console.log(`in TroopManager: 起始格子不再属于该玩家，取消行军路径`);
-                this._marchingPaths.shift();
-                return this.processMarchingQueues(); // 递归处理下一条路径
-            }
+        // 获取当前步骤的from节点（当前位置）
+        let fromPos: Vec2;
+        if (currentPath.currentStep === 0) {
+            // 如果是第一步，from就是起始点
+            fromPos = currentPath.sourceTile;
+        } else {
+            // 否则from是上一步的to节点
+            fromPos = currentPath.targetTiles[currentPath.currentStep - 1];
         }
         
+        // 获取当前步骤的to节点（目标位置）
         // 如果已经到达最后一步，完成行军
         if (currentPath.currentStep >= currentPath.targetTiles.length) {
-            console.log(`in TroopManager: 行军路径已完成`);
+            console.log(`行军路径已完成，从队列中移除`);
             this._marchingPaths.shift(); // 移除当前路径
-            return this.processMarchingQueues(); // 递归处理下一条路径
+            return this.processMarchingQueues(); // 处理下一条路径
         }
         
-        // 如果是第一步，从源格子减少兵力
-        if (currentPath.currentStep === 0) {
-            const sourceTile = this._mapManager.getTile(currentPath.sourceTile.x, currentPath.sourceTile.y);
-            
-            if (sourceTile && sourceTile.ownerId === currentPath.playerId) {
-                // 再次检查源格子是否仍有足够兵力
-                if (sourceTile.troops >= 2) {
-                    // 减少源格子兵力，但保留1个兵力在原地
-                    sourceTile.troops = 1; // 源格子只留1个兵力
-                    
-                    // 更新格子显示
-                    this._mapManager.updateTileTroops(currentPath.sourceTile.x, currentPath.sourceTile.y, 1);
-                    
-                    console.log(`in TroopManager: 从起始格子 [${currentPath.sourceTile.x},${currentPath.sourceTile.y}] 实际派出 ${currentPath.assignedTroops} 兵力，留下1个士兵`);
-                } else {
-                    // 源格子兵力不足，取消行军
-                    console.log(`in TroopManager: 起始格子兵力已变化，当前不足(${sourceTile.troops})，取消行军路径`);
-                    this._marchingPaths.shift();
-                    return this.processMarchingQueues();
-                }
-            } else {
-                // 源格子不再属于该玩家，取消行军
-                console.log(`in TroopManager: 起始格子所有权已变更，取消行军路径`);
-                this._marchingPaths.shift();
-                return this.processMarchingQueues();
-            }
-        }
+        const toPos = currentPath.targetTiles[currentPath.currentStep];
         
-        // 获取当前目标格子
-        const targetPos = currentPath.targetTiles[currentPath.currentStep];
-        const targetTile = this._mapManager.getTile(targetPos.x, targetPos.y);
+        // 获取from和to节点的格子对象
+        const fromTile = this._mapManager.getTile(fromPos.x, fromPos.y);
+        const toTile = this._mapManager.getTile(toPos.x, toPos.y);
         
-        if (!targetTile) {
-            console.error(`in TroopManager: 目标格子 [${targetPos.x},${targetPos.y}] 不存在，跳过此步骤`);
+        if (!fromTile || !toTile) {
+            console.error(`格子不存在，跳过此步骤`);
             currentPath.currentStep++; // 增加步骤
             return;
         }
         
-        console.log(`in TroopManager: 移动到目标格子 [${targetPos.x},${targetPos.y}]`);
+        console.log(`处理行军：从 [${fromPos.x},${fromPos.y}] 到 [${toPos.x},${toPos.y}]`);
         
-        // 检查目标格子是否是己方格子，如果是，吸收其兵力
-        if (targetTile.ownerId === currentPath.playerId && targetTile.troops > 0) {
-            // 目标是己方格子且有兵力，将兵力带走
-            const additionalTroops = targetTile.troops;
-            currentPath.assignedTroops += additionalTroops;
-            
-            console.log(`in TroopManager: 目标格子是己方土地，带走 ${additionalTroops} 兵力，当前总兵力: ${currentPath.assignedTroops}`);
-            
-            // 清空目标格子兵力
-            targetTile.troops = 0;
-            
-            // 更新格子显示
-            this._mapManager.updateTileTroops(targetPos.x, targetPos.y, 0);
+        // 检查from节点是否属于当前行军的玩家，且有足够兵力
+        if (fromTile.ownerId !== currentPath.playerId) {
+            console.log(`起始格子不再属于该玩家，取消行军路径`);
+            this._marchingPaths.shift();
+            return this.processMarchingQueues();
         }
         
-        // 解决战斗（即使是己方格子，也要通过战斗系统处理以更新状态）
-        this.resolveCombat(currentPath.playerId, targetPos.x, targetPos.y, currentPath.assignedTroops);
+        // 计算可调遣的兵力
+        const availableTroops = fromTile.troops - 1;
+        
+        // 如果from节点兵力不足，取消行军
+        if (availableTroops <= 0) {
+            console.log(`起始格子兵力不足，取消行军路径`);
+            this._marchingPaths.shift();
+            return this.processMarchingQueues();
+        }
+        
+        // 设置实际调遣的兵力
+        let troopsToMove: number;
+        troopsToMove = availableTroops;
+
+        // 处理from节点：留下1个兵力
+        fromTile.troops = 1;
+        this._mapManager.updateTileTroops(fromPos.x, fromPos.y, 1);
+        console.log(`从 [${fromPos.x},${fromPos.y}] 调出 ${troopsToMove} 兵力，留下1个士兵`);
+        
+        // 处理to节点（根据所有权分类）
+        if (toTile.ownerId === currentPath.playerId) {
+            // 情况1：目标是己方格子，增加兵力
+            const newTroops = toTile.troops + troopsToMove;
+            this._mapManager.updateTileTroops(toPos.x, toPos.y, newTroops);
+            console.log(`到达己方格子 [${toPos.x},${toPos.y}]，增加兵力至 ${newTroops}`);
+        } else {
+            // 情况2：目标是无人控制或敌方格子，进行战斗
+            this.resolveCombat(currentPath.playerId, toPos.x, toPos.y, troopsToMove);
+        }
         
         // 移动到下一步
         currentPath.currentStep++;
         
         // 如果行军已完成，移除当前路径
         if (currentPath.currentStep >= currentPath.targetTiles.length) {
-            console.log(`in TroopManager: 行军路径已完成，从队列中移除`);
+            console.log(`行军路径已完成，从队列中移除`);
             this._marchingPaths.shift();
             
             // 如果还有其他路径，继续处理
             if (this._marchingPaths.length > 0) {
-                console.log(`in TroopManager: 处理下一条行军路径`);
-                // 这里不使用递归，避免堆栈溢出风险
+                console.log(`处理下一条行军路径`);
             }
         }
     }
