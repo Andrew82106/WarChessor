@@ -18,10 +18,10 @@ export class MapManager extends Component {
     mapContainer: Node = null!;
     
     @property
-    tileSize: number = 80;
+    tileSize: number = 60;
     
     @property
-    tileGap: number = 2;
+    tileGap: number = 1;
     
     @property
     currentLevelId: string = "level1";
@@ -136,7 +136,7 @@ export class MapManager extends Component {
         this.createMapGrid();
         
         // 设置地图中心位置
-        this.centerMap();
+        // this.centerMap();
         console.log("地图初始化完成");
         return true;
     }

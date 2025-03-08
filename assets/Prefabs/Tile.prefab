@@ -139,8 +139,8 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 30,
-      "height": 30
+      "width": 50,
+      "height": 50
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -275,7 +275,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 24.587764793417364,
+      "width": 46.66890895113032,
       "height": 25.2
     },
     "_anchorPoint": {
@@ -314,8 +314,8 @@
     "_string": "Troops",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 8.925,
-    "_fontSize": 8,
+    "_actualFontSize": 16.45,
+    "_fontSize": 14,
     "_fontFamily": "Arial",
     "_lineHeight": 20,
     "_overflow": 0,
@@ -324,7 +324,7 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_isItalic": false,
-    "_isBold": false,
+    "_isBold": true,
     "_isUnderline": false,
     "_underlineHeight": 2,
     "_cacheMode": 0,
@@ -434,8 +434,8 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 30,
-      "height": 30
+      "width": 50,
+      "height": 50
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -530,7 +530,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": 0,
+      "y": -2.193,
       "z": 0
     },
     "_lrot": {
@@ -570,8 +570,8 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 100,
-      "height": 100
+      "width": 50,
+      "height": 50
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -703,8 +703,8 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 100,
-      "height": 100
+      "width": 50,
+      "height": 50
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -786,8 +786,8 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 40,
-      "height": 40
+      "width": 50,
+      "height": 50
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",

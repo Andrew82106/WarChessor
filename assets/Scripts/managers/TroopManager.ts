@@ -183,6 +183,12 @@ export class TroopManager extends Component {
             currentPath.currentStep++; // 增加步骤
             return;
         }
+        if (fromTile.ownerId !== currentPath.playerId) {
+            console.error(`TroopManager: 起点格子不属于当前玩家，中止该路线, fromTile=${!!fromTile}, toTile=${!!toTile}`);
+            this._marchingPaths.shift(); // 移除当前路径
+            console.log(`TroopManager: 行军路径队列长度: ${this._marchingPaths.length}`)
+            return;
+        }
         
         // 显示当前两个格子的状态
         console.log(`TroopManager: 处理行军：从 [${fromPos.x},${fromPos.y}] 到 [${toPos.x},${toPos.y}]`);

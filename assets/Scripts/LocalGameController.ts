@@ -237,6 +237,7 @@ export class LocalGameController extends Component {
      * 设置事件监听
      */
     private _setupEventListeners() {
+        console.log("======= 设置事件监听器 =======");
         // 设置游戏速度按钮点击事件
         if (this.endTurnButton) {
             this.endTurnButton.node.on(Button.EventType.CLICK, this._onEndTurnButtonClicked, this);
@@ -386,9 +387,11 @@ export class LocalGameController extends Component {
     /**
      * Tile被选中的事件处理
      */
-    private _onTileSelected(tile: TileComponent) {
-        console.log(`LocalGameController: _onTileSelected被调用，tile位置：[${tile.gridPosition.x},${tile.gridPosition.y}]`);
-        console.log(`当前派遣模式状态: ${this._isInDispatchMode}`);
+    private _onTileSelected(event: any): void {
+        console.log("======= 触发tile-selected事件 =======");
+        console.log("事件数据:", event);
+        console.log("当前游戏状态: 派遣模式=", this._isInDispatchMode);
+        console.log("当前选中tile:", this._selectedTile);
         
         if (!this._gameStarted || this._gameOver || !this._mapManager || !this._playerManager) {
             console.log("LocalGameController: 游戏未开始，已结束，或缺少必要管理器引用，忽略点击");
@@ -396,6 +399,7 @@ export class LocalGameController extends Component {
         }
         
         // 无论是否在派遣模式，都让当前点击的tile短暂高亮
+        const tile = event as TileComponent;
         tile.setHighlight(true);
         const highlightNode = tile.highlightNode;
         if (highlightNode) {
@@ -838,7 +842,11 @@ export class LocalGameController extends Component {
     /**
      * 高亮显示目标格子
      */
-    private _highlightTargetTiles() {
+    private _highlightTargetTiles(): void {
+        console.log("======= 高亮目标tiles =======");
+        console.log("当前选中tile:", this._selectedTile);
+        console.log("目标tiles数量:", this._targetTiles?.length || 0);
+        
         if (!this._mapManager) return;
         
         // 渐变高亮选中的格子

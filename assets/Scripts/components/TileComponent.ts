@@ -379,11 +379,14 @@ export class TileComponent extends Component {
      */
     private onTileClicked() {
         //console.log(`TileComponent: 格子 [${this._gridPosition.x},${this._gridPosition.y}] 被点击`);
+        console.log(`======= Tile [${this.gridPosition.x},${this.gridPosition.y}] 被点击 =======`);
+        console.log("所有者:", this.ownerId, "兵力:", this.troops);
+        console.log("当前高亮状态:", this.highlightNode.active);
         
         // 发送事件到场景
         const scene = director.getScene();
         if (scene) {
-            //console.log(`TileComponent: 向场景 ${scene.name} 发送tile-selected事件`);
+            console.log(`TileComponent: 向场景 ${scene.name} 发送tile-selected事件`);
             scene.emit('tile-selected', this);
         } else {
             console.error("TileComponent: 无法获取场景引用，事件发送失败");
