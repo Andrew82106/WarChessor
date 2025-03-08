@@ -164,9 +164,11 @@ export class MapManager extends Component {
         if (layout) {
             layout.enabled = false;
         }
+        const containerSize = this.mapContainer.getComponent(UITransform).contentSize;
+        const tileSize = Math.min(containerSize.width / this._mapWidth, containerSize.height / this._mapHeight);
         
         // 计算有效瓷砖尺寸，包括间隙
-        const effectiveTileSize = this.tileSize + this.tileGap;
+        const effectiveTileSize = tileSize + this.tileGap;
         const mapWidth = this._mapWidth * effectiveTileSize;
         const mapHeight = this._mapHeight * effectiveTileSize;
         
@@ -178,8 +180,8 @@ export class MapManager extends Component {
         }
         
         // 计算起始位置，确保地图居中显示
-        const startX = -mapWidth / 2 + this.tileSize / 2;
-        const startY = mapHeight / 2 - this.tileSize / 2;
+        const startX = -mapWidth / 2 + tileSize / 2;
+        const startY = mapHeight / 2 - tileSize / 2;
         
         // 初始化地图格子二维数组
         this._mapTiles = Array(this._mapHeight).fill(null)
@@ -415,5 +417,26 @@ export class MapManager extends Component {
      */
     getMapTiles(): TileComponent[][] {
         return this._mapTiles;
+    }
+    
+    // 添加到LocalGameController或创建专门的LayoutManager
+    adjustMapLayout(): void {
+        const screenSize = view.getVisibleSize();
+        const mapSize = this.getMapSize();
+        
+        // 计算理想的缩放比例
+        const scaleX = screenSize.width / (mapSize.width * this.tileSize);
+        const scaleY = screenSize.height / (mapSize.height * this.tileSize);
+        const scale = Math.min(scaleX, scaleY) * 0.9; // 留出一些边距
+        
+        // 应用缩放到MapContainer
+        this.mapContainer.scale = new Vec3(scale, scale, 1);
+        
+        // 调整位置使其居中
+        this.mapContainer.position = new Vec3(
+            (screenSize.width - mapSize.width * scale) / 2,
+            (screenSize.height - mapSize.height * scale) / 2,
+            0
+        );
     }
 } 

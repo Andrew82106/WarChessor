@@ -1,204 +1,254 @@
-# WarChessor
+# WarChessor - 实时战棋游戏
 
-## 一、游戏玩法设计细化
+## 一、系统架构
 
-### 1. 核心机制优化
+### 1. 核心管理器体系
 
-#### 兵力增长规则  
-- **基本土地**：需至少1名士兵驻守，每5回合自动+1兵（可叠加政治中心效果）。若被敌军占领，驻军归零后需重新积累。  
-- **大本营**：每回合固定+1兵，初始驻军设定为 0。若被攻陷，玩家立即失败。  
-- **人口重镇**：占领后与大本营同频增长（每回合+1兵），建议地图中每50格设置1个，总数量不超过地图面积的5%。
-- **政治中心**：  
-  - 全局可见，本方缩短所有土地兵力增长周期（如占领1个则基本土地变为4回合+1兵，最多叠加至1回合+1兵）。  
+#### MapManager（地图管理器）
+- **功能职责**：
+  - 加载和解析地图数据（地形、所有权、兵力）
+  - 创建和渲染地图网格
+  - 管理地图格子的状态更新
+  - 提供格子查询和操作接口
+  - 地形类型包括：基本土地、人口重镇、政治中心、大本营
+- **主要方法**：
+  - `loadMapData(mapData: MapData)`: 加载地图数据
+  - `createMapGrid()`: 创建地图网格
+  - `getTile(x: number, y: number)`: 获取指定坐标的格子
+  - `updateTileTroops(x: number, y: number, troops: number)`: 更新格子兵力
+  - `updateTileOwnership(x: number, y: number, ownerId: number)`: 更新格子所有权
 
-#### 兵力运动规则
-- 兵力运动速度恒定，每格一个回合。
+#### PlayerManager（玩家管理器）
+- **功能职责**：
+  - 管理所有玩家数据和状态（含AI和真实玩家）
+  - 跟踪玩家拥有的土地和资源
+  - 检查玩家胜负条件
+  - 处理多玩家同时操作的状态同步
+- **主要方法**：
+  - `createPlayers(playerCount: number, aiCount: number)`: 创建玩家
+  - `getPlayer(playerId: number)`: 获取指定ID的玩家
+  - `getPlayerColor(playerId: number)`: 获取玩家颜色
+  - `updatePlayerStats(playerId: number)`: 更新玩家统计数据
+  - `checkVictoryCondition()`: 检查胜利条件
 
-### 2. 地图动态设计
+#### TimeManager（时间管理器）
+- **功能职责**：
+  - 管理游戏实时时钟
+  - 处理游戏速度控制（加速/减速/暂停）
+  - 协调各系统的实时更新频率
+  - 触发周期性事件（如兵力增长、资源收集）
+- **主要方法**：
+  - `startGame()`: 开始游戏时钟
+  - `pauseGame()`: 暂停游戏
+  - `resumeGame()`: 恢复游戏
+  - `setGameSpeed(speed: number)`: 设置游戏速度
+  - `scheduleEvent(callback: Function, interval: number)`: 安排周期性事件
 
-#### 地形复杂度  
-- **基础结构**：采用蜂窝状六边形网格（优于方形网格，增强策略性），地图尺寸支持10×10至 30×30动态生成。  
-- **关键城镇分布**：  
-  - 人口重镇优先布局在交通枢纽（如河流交叉口、山脉隘口）
-  - 政治中心分散在地图四角或中心区域，需通过路径争夺。
+#### TroopManager（部队管理器）
+- **功能职责**：
+  - 管理部队实时移动和战斗逻辑
+  - 维护并行的行军路径队列
+  - 处理兵力分配和战斗解算
+  - 实现行军状态更新和反馈
+- **主要方法**：
+  - `createMarchingPath(playerId: number, sourceTile: Vec2, targetTiles: Vec2[], troops: number)`: 创建行军路径
+  - `processMarchingQueues()`: 实时处理所有行军队列
+  - `resolveCombat(attackerId: number, defenderX: number, defenderY: number, attackingTroops: number)`: 解决战斗
+  - `getMarchingStatus()`: 获取行军状态
+  - `updateMarchingStatus()`: 更新行军状态
 
-### 3. 战斗与视野系统
-- **占领判定**：军队数值高的方自动占领土地，若数值相等则双方兵力归零，土地被原来占领者拥有。  
-- **视野机制**：  
-  - 玩家仅可见已占领土地及外围1格（迷雾效果采用灰度渐变）
-  - 政治中心以高亮图标全局显示。  
+#### AIManager（AI管理器）
+- **功能职责**：
+  - 实现AI实时决策逻辑
+  - 根据AI难度执行不同策略
+  - 评估地图态势并做出行动决策
+  - 与玩家同步行动，提供实时挑战
+- **主要方法**：
+  - `processAILogic(deltaTime: number)`: 执行AI逻辑，每帧调用
+  - `evaluateMap()`: 评估地图态势
+  - `findBestTarget()`: 寻找最佳攻击目标
+  - `selectAttackPath()`: 选择进攻路径
+  - `planDefense()`: 规划防御策略
 
-### 4. AI设计（本地关卡）
-- **难度分级**：  
-  - **简单AI**：优先防守大本营，兵力分散。
-  - **困难AI**：主动抢占政治中心，采用"钳形攻势"包围玩家。
-- **行为树逻辑**：根据玩家兵力密度动态调整策略，如低密度区域偷袭、高密度区域迂回。
+### 2. 组件系统
 
-## 二、UI/UX设计细化
+#### TileComponent（格子组件）
+- **功能职责**：
+  - 管理单个地图格子的显示和交互
+  - 处理格子点击事件
+  - 更新格子的视觉状态（所有权、兵力、高亮等）
+  - 显示地形和战争迷雾
+- **主要属性**：
+  - `background: Sprite`: 背景精灵
+  - `troopsLabel: Label`: 兵力显示标签
+  - `highlightNode: Node`: 高亮效果节点
+  - `fogNode: Node`: 战争迷雾节点
+  - `terrainIcon: Sprite`: 地形图标
+- **主要方法**：
+  - `onTileClicked()`: 处理格子点击事件
+  - `setHighlight(highlight: boolean)`: 设置高亮状态
+  - `updateOwnerDisplay()`: 更新所有者显示
+  - `updateTroopsDisplay()`: 更新兵力显示
+  - `updateVisibility()`: 更新格子可见性
 
-### 1. 界面层级与交互
+#### LocalGameController（本地游戏控制器）
+- **功能职责**：
+  - 作为游戏主控制器，协调所有系统
+  - 处理用户输入和UI交互
+  - 管理游戏流程和状态
+  - 实现特殊游戏功能（如派遣模式）
+  - 处理AI和玩家的并行操作
+- **主要方法**：
+  - `update(dt: number)`: 每帧更新游戏状态
+  - `_onTileSelected(tile: TileComponent)`: 处理格子选择
+  - `_onDispatchButtonClicked()`: 处理派遣按钮点击
+  - `_finishDispatchMode()`: 完成派遣模式
+  - `_calculatePathBetweenPoints(start: Vec2, end: Vec2)`: 计算两点间路径
+  - `_highlightTargetTiles()`: 高亮目标格子
+  - `_clearHighlights()`: 清除高亮效果
 
-#### 主页面  
-- **视觉风格**：极简线条风，背景纯色渐变。  
-- **标题**：游戏名称"WarChessor"，图标为城堡(castle)，使用SVG生成。
-- **按钮设计**：  
-  - **本地模式**：图标为城堡，点击后弹出关卡选择浮层（显示关卡难度、地图尺寸、通关率）。  
-  - **在线模式**：图标为卫星，点击后弹出Toast提示"指挥官，远征系统正在建设中！"并播放电流音效。
+## 二、RTS游戏核心机制
 
-#### 战斗界面
-- **状态面板**：右侧悬浮面板显示兵力统计、政治中心占领进度。 
-- **地图渲染**：以用户颜色展示占领土地
-- **缩放功能**：地图可缩放，放大时显示具体兵力，缩小时仅展示颜色
-- **控制按钮**：左下侧放置行军按钮
+### 1. 实时操作系统
+- **特点**：所有玩家（包括AI）同时进行操作，没有轮流行动的概念
+- **技术实现**：
+  - 使用`update`方法每帧处理游戏逻辑
+  - 多线程处理玩家指令和AI决策
+  - 设置优先级队列处理并发操作
+- **时间控制**：
+  - 游戏速度固定为一秒一步，最小的单位是一秒
 
-#### 交互方式
-- 用户通过点击行军按钮来开始行军
-- 点击行军按钮后，用户可依次单击土地设置中转点（最多10个）
-- 行军按钮点击后变为中止路径按钮，允许提前结束路径设置
+### 2. 兵力增长与资源系统
+- **自动增长**：
+  - 各类土地按不同速率自动增长兵力（实时计时）
+  - 基本土地：每5秒+1兵
+  - 人口重镇：每1秒+1兵
+  - 大本营：每1秒+1兵
+  - 政治中心：本身不增加兵力，拥有一个政治中心后，所有其他节点增兵速度加快，人口重镇和大本营每一秒+2兵，基本土地每5秒+2兵
 
-### 2. 动态反馈与沉浸感
-- **战斗特效**：政治中心被占领时播放全屏金色波纹动画。  
-- **音效设计**：背景音乐根据战况动态切换（平静→紧张），关键事件配语音提示。
+### 3. 渐变高亮效果实现
+- **技术方案**：使用Cocos Creator的tween动画系统实现格子高亮的淡入淡出效果
+- **实现步骤**：
+  1. 在TileComponent中的highlightNode节点添加UIOpacity组件
+  2. 实现高亮显示时的渐变效果代码：
+  ```typescript
+  private _highlightTargetTiles() {
+      if (!this._mapManager) return;
 
-## 游戏界面
+      // 渐变高亮选中的格子
+      if (this._selectedTile) {
+          this._selectedTile.setHighlight(true);
+          
+          // 查找高亮节点
+          const highlightNode = this._selectedTile.highlightNode;
+          if (highlightNode) {
+              // 获取或添加UIOpacity组件
+              let uiOpacity = highlightNode.getComponent(UIOpacity);
+              if (!uiOpacity) {
+                  uiOpacity = highlightNode.addComponent(UIOpacity);
+              }
+              
+              // 设置初始透明度为0
+              uiOpacity.opacity = 0;
+              highlightNode.active = true;
+              
+              // 使用tween实现渐变效果
+              tween(uiOpacity)
+                  .to(0.1, { opacity: 255 }) // 0.1秒内渐变至完全不透明
+                  .start();
+          }
+      }
+  }
+  ```
 
-### 主界面
-- **背景**：战棋主题背景图片
-- **标题**：战棋大师（字体大小60px，白色）
-- **按钮**：
-  - 本地对战按钮：点击后进入关卡选择页面
-  - 联机对战按钮：点击后显示"远征系统正在开发中"提示
-  
-游戏的第一个场景是主界面，玩家可以从这里进入本地对战模式或联机对战模式。主界面使用`Main.ts`脚本控制，目前已实现界面的基本布局，包括背景、标题和两个功能按钮。点击本地对战按钮会跳转到关卡选择页面，点击联机对战按钮会显示提示信息。
+### 4. 实时派遣路径系统
+- **功能特性**：
+  - 玩家可以随时发出部队移动指令
+  - 玩家的部队移动指令需要进入指令队列进行排序，按照先进先出原则依次处理队列中的指令
+  - 路径规划采用迪杰斯特拉算法
 
-### 关卡选择页面
-- **背景**：与主界面相同的背景图片
-- **标题**：关卡选择（字体大小48px，白色）
-- **滚动视图**：展示所有可选关卡
-- **关卡项目**：
-  - 关卡名称
-  - 关卡描述
-  - 难度等级（以星级表示）
-  - 关卡预览图
-  - 开始按钮
-  - 锁定状态图标（未解锁的关卡）
-- **返回按钮**：返回主界面
+### 5. 实时战斗系统
+- **战斗机制**：
+  - 当两方部队在同一格子相遇时自动触发战斗
+  - 暂不支持多方混战（2个以上玩家在同一格子）
 
-关卡选择页面允许玩家选择要挑战的关卡。未解锁的关卡显示为灰色，并带有锁定图标。关卡数据存储在`assets/resources/levels/levelData.json`文件中，可以方便地添加、修改或删除关卡。点击已解锁关卡的开始按钮将加载相应的游戏场景。
 
-## 战棋游戏实现
+### 6. AI系统
+- **AI实时行为**：
+  - AI和玩家同时行动，无需等待玩家操作
+  - 实时评估局势，动态调整策略
+  - 多级AI难度提供不同挑战性
 
-本项目实现了一个RTS类战棋游戏，玩家和AI在四边形网格地图上争夺土地和资源。
+## 三、组件交互与调用关系
 
-### 重要修复
+### 1. 游戏主循环
+- 游戏启动 → LocalGameController.start()
+  - 初始化游戏系统和组件
+  - 加载地图和玩家数据
+  - 启动游戏时钟 → TimeManager.startGame()
 
-在开发过程中，我们解决了以下关键问题：
+- 每帧更新 → LocalGameController.update(deltaTime)
+  - 处理用户输入
+  - 更新AI行为 → AIManager.processAILogic(deltaTime)
+  - 处理部队移动 → TroopManager.processMarchingQueues()
+  - 更新地图状态 → MapManager.update()
+  - 检查胜负条件 → PlayerManager.checkVictoryCondition()
 
-1. **修复地图数据加载问题**
-   - 问题：`Cannot read properties of undefined (reading 'width')`和`关卡level1的地图数据无效`
-   - 原因：JSON数据结构与代码期望的结构不匹配。地图尺寸在JSON中是关卡对象的顶层属性`mapSize`，而不是`mapData.size`
-   - 解决方案：
-     - 修改了`MapData`接口，使`size`字段成为可选的
-     - 在`loadLevelData`方法中添加了逻辑，从`level.mapSize`复制到`level.mapData.size`
-     - 增强了错误检查和日志记录，确保数据结构验证更全面
+### 2. 玩家操作流程
+- 玩家点击格子 → TileComponent.onTileClicked() → LocalGameController._onTileSelected()
+  - 判断是否可选择该格子
+  - 高亮显示选中格子 → LocalGameController._highlightTargetTiles()
+  - 在派遣模式下添加到路径点 → LocalGameController._handleDispatchModeSelection()
 
-2. **修复Tile组件颜色显示问题**
-   - 问题：格子颜色不正确显示
-   - 解决方案：
-     - 改进了`TileComponent`中的`updateOwnerDisplay`方法，使其能够正确获取PlayerManager和玩家颜色
-     - 添加了地形颜色映射，使不同类型的格子有不同的基础颜色
-     - 确保在格子初始化时正确设置节点状态
+- 玩家点击派遣按钮 → LocalGameController._onDispatchButtonClicked()
+  - 进入派遣模式
+  - 更新UI状态
+  - 等待玩家选择路径点
 
-### Cocos Creator配置步骤
+- 玩家完成派遣 → LocalGameController._finishDispatchMode()
+  - 计算最终路径 → LocalGameController._calculatePathBetweenPoints()
+  - 创建行军路径 → TroopManager.createMarchingPath()
+  - 清除派遣模式状态
+  - 更新行军状态面板
 
-1. **资源目录结构**
-   ```
-   assets/
-     ├── resources/
-         └── levels/
-             └── levelData.json
-   ```
+## 四、开发和调试指南
 
-2. **Tile预制体设置**
-   - 创建包含以下组件的Tile节点：
-     - Sprite (背景)
-     - Label (显示兵力)
-     - Highlight节点 (选中效果)
-     - Fog节点 (战争迷雾)
-     - TerrainIcon节点 (地形图标)
-   - 将TileComponent脚本添加到节点并正确设置引用
+### 1. 项目结构
+```
+assets/
+  ├── Scenes/               // 游戏场景
+  │   ├── Main.scene        // 主菜单场景
+  │   ├── Chooselevel.scene // 关卡选择场景
+  │   └── LocalGame.scene   // 本地游戏场景
+  ├── Scripts/
+  │   ├── components/       // 组件脚本
+  │   │   └── TileComponent.ts // 格子组件
+  │   ├── managers/         // 管理器脚本
+  │   │   ├── MapManager.ts
+  │   │   ├── PlayerManager.ts
+  │   │   ├── TimeManager.ts  // 替代原TurnManager
+  │   │   ├── TroopManager.ts
+  │   │   └── AIManager.ts
+  │   ├── models/           // 数据模型
+  │   │   ├── MapData.ts
+  │   │   └── Player.ts
+  │   └── utils/            // 工具类
+  │        |—— LocalGameController.ts // 主控制器
+  │        |—— ChooseLevel.ts
+  │        |—— Main.ts
+  │        └—— LevelItem.ts
+  ├── resources/
+  │   └── levels/          // 关卡数据
+  │       └── levelData.json
+  └── Prefabs/
+      ├── Tile.prefab      // 格子预制体
+      └── MarchingStatusItem.prefab // 行军状态项预制体
+```
 
-3. **LocalGame场景设置**
-   - 确保LocalGameController脚本添加到场景根节点
-   - 添加MapContainer节点并设置引用
-   - 设置UI元素：回合显示、玩家显示、结束回合按钮等
-   - 确保所有管理器脚本正确添加和初始化
 
-### 调试技巧
+## 五、扩展功能与未来计划
 
-1. 查看控制台日志，特别关注资源加载和数据解析过程
-2. 使用Scene面板检查节点层次结构和组件设置
-3. 确保预制体所有引用正确设置
 
-### 游戏核心功能
 
-- 地图生成与渲染
-- 多种土地类型及其属性
-- 玩家系统(用户和AI)
-- 回合制系统
-- 兵力增长机制
-- 行军和战斗系统
-  - 派遣部队时，源格子始终保留1个兵力作为守备
-  - 经过己方土地时，会自动携带该地块上的所有士兵（组合兵力）
-  - 战斗结果基于不同情况：
-    1. 攻占无主土地：结果兵力 = 进攻兵力 - 无主土地兵力
-    2. 攻击己方土地：直接更新为行军部队兵力
-    3. 攻击敌方土地：按兵力对比决定胜负
-  - 战斗平局时格子所有权不变，双方兵力归零
-  - 行军路径自动计算，可以设置多个中转点
-- 战争迷雾视野系统
-- 胜负判定
-
-### 新增功能：派遣路径设定
-
-新增了派遣路径设定功能，允许玩家规划兵力移动路径：
-
-1. **派遣按钮**：
-   - 在游戏UI中添加一个"派遣"按钮
-   - 点击后按钮文字变为"完成(X)"，X表示剩余可设置的路径点数
-   - 可以随时点击"完成"按钮来结束路径点选择，系统会计算并执行行军路线
-
-2. **路径设定**：
-   - 进入派遣模式后，玩家点击地图上的格子来设置路径
-   - 第一个选择的必须是玩家自己拥有的格子
-   - 玩家可以选择任意格子作为路径点（不必相邻）
-   - 系统会自动计算选择点之间的最短路径
-   - 每次点击后X值减1，降至0或玩家主动点击完成按钮时结束设定
-
-3. **路径计算**：
-   - 完成选择后（点击"完成"按钮或者点数用完），系统会自动计算所有选择点之间的最短路径
-   - 使用广度优先搜索(BFS)算法计算两点间最短路径
-   - 如果计算出的路径超过20个点，会自动截断为20个点
-   - 将计算好的最终路径添加到行军队列中
-
-4. **行军状态显示**：
-   - 在屏幕左侧添加了行军状态面板，显示当前行军队列中的路线状态
-   - 无行军路线时，显示"无行军路线"（灰色文字）
-   - 有执行中的行军路线时，显示"执行中：行军路线(A/B)"（绿色文字）
-     - A表示当前执行到第几步
-     - B表示行军路线总步数
-   - 排队中的行军路线显示为"排队中：行军路线(B)"（橙色文字）
-   - 面板会实时更新行军进度，完成后自动清除
-
-5. **Cocos中实现步骤**：
-   - 打开LocalGame场景，在UI节点下添加一个Button作为派遣按钮
-   - 在Button旁添加一个Label显示剩余次数
-   - 在屏幕左侧创建一个垂直布局的Node作为行军状态面板
-   - 创建一个Label预制体作为行军状态项
-   - 在Inspector面板中将相关UI组件拖拽到LocalGameController的对应属性中
-
-6. **调试说明**：
-   - 派遣模式下会在控制台输出详细日志
-   - 可以看到路径选择过程和最终计算出的路径
-   - 如遇问题，检查Tile预制体中是否包含Highlight节点
-   - 确保marchingStatusPanel和marchingStatusItemPrefab已正确设置
+## 六、总结
+WarChessor是一个基于Cocos Creator开发的实时战略棋盘游戏，结合了RTS的策略性和棋盘游戏的精确操作。通过实时AI行为和玩家并行操作，提供了紧张刺激的游戏体验。项目采用模块化设计，各系统间松耦合，便于扩展和维护。未来将持续优化游戏性能，并添加更多特色玩法，为玩家提供更丰富的战略选择。

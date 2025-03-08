@@ -1,12 +1,14 @@
-import { _decorator, Component, Node, Label, Button, Vec2, Prefab, instantiate, Color, Camera, director, Layout } from 'cc';
+import { _decorator, Component, Node, Label, Button, Vec2, Prefab, instantiate, Color, Camera, director, Layout, UIOpacity } from 'cc';
 import { MapManager } from './managers/MapManager';
 import { PlayerManager } from './managers/PlayerManager';
-import { TurnManager } from './managers/TurnManager';
+import { TimeManager } from './managers/TimeManager';
 import { TroopManager } from './managers/TroopManager';
 import { AIManager } from './managers/AIManager';
 import { TileComponent } from './components/TileComponent';
 import { LevelData } from './models/MapData';
 import { TerrainType } from './models/MapData';
+import { tween } from 'cc';
+import { Tween } from 'cc';
 
 const { ccclass, property } = _decorator;
 
@@ -52,7 +54,7 @@ export class LocalGameController extends Component {
     // 各个管理器引用
     private _mapManager: MapManager | null = null;
     private _playerManager: PlayerManager | null = null;
-    private _turnManager: TurnManager | null = null;
+    private _timeManager: TimeManager | null = null;
     private _troopManager: TroopManager | null = null;
     private _aiManager: AIManager | null = null;
     
@@ -118,7 +120,7 @@ export class LocalGameController extends Component {
         
         // 设置游戏规则
         this._troopManager?.setGameRules(this._levelData.gameRules);
-        this._turnManager?.setGameRules(this._levelData.gameRules);
+        this._timeManager?.setGameRules(this._levelData.gameRules);
         
         // 设置大本营位置
         if (this._levelData.mapData.headquarters) {
@@ -154,7 +156,7 @@ export class LocalGameController extends Component {
         this._updateUI();
         
         // 开始游戏回合
-        this._turnManager?.startTurnLoop();
+        this._timeManager?.startGame();
         this._gameStarted = true;
         
         // 启动兵力增长计时器 - 每5秒增加一次兵力
@@ -198,73 +200,75 @@ export class LocalGameController extends Component {
      * 初始化各个管理器
      */
     private _initManagers() {
-        // 正确获取地图容器节点上的MapManager
-        const mapContainerNode = this.mapContainer;
-        this._mapManager = mapContainerNode.getComponent(MapManager) || mapContainerNode.addComponent(MapManager);
-        
-        // 确保预制体和容器正确关联
-        this._mapManager.tilePrefab = this.tilePrefab;
-        this._mapManager.mapContainer = mapContainerNode;
+        // 创建地图管理器
+        this._mapManager = this.getComponent(MapManager) || this.addComponent(MapManager);
         
         // 创建玩家管理器
         this._playerManager = this.getComponent(PlayerManager) || this.addComponent(PlayerManager);
         
-        // 创建兵力管理器
-        this._troopManager = this.getComponent(TroopManager) || this.addComponent(TroopManager);
+        // 创建时间管理器
+        this._timeManager = this.getComponent(TimeManager) || this.addComponent(TimeManager);
         
-        // 创建回合管理器
-        this._turnManager = this.getComponent(TurnManager) || this.addComponent(TurnManager);
+        // 创建部队管理器
+        this._troopManager = this.getComponent(TroopManager) || this.addComponent(TroopManager);
         
         // 创建AI管理器
         this._aiManager = this.getComponent(AIManager) || this.addComponent(AIManager);
         
-        // 设置管理器之间的引用
-        this._mapManager.setPlayerManager(this._playerManager);
-        this._troopManager.setManagers(this._mapManager, this._playerManager);
-        this._turnManager.setManagers(this._playerManager, this._troopManager);
-        this._aiManager.setManagers(this._mapManager, this._playerManager, this._troopManager);
+        // 设置管理器之间的引用关系
+        if (this._mapManager && this._playerManager && this._timeManager && this._troopManager && this._aiManager) {
+            // 将管理器与地图容器关联
+            this._mapManager.mapContainer = this.mapContainer;
+            this._mapManager.tilePrefab = this.tilePrefab;
+            
+            // 设置管理器引用
+            this._timeManager.setManagers(this._playerManager, this._troopManager, this._aiManager);
+            this._troopManager.setManagers(this._mapManager, this._playerManager);
+            this._aiManager.setManagers(this._mapManager, this._playerManager, this._troopManager);
+            
+            // 设置游戏规则
+            if (this._levelData) {
+                this._timeManager.setGameRules(this._levelData.gameRules);
+            }
+        }
     }
     
     /**
      * 设置事件监听
      */
     private _setupEventListeners() {
-        //console.log("LocalGameController: 设置事件监听");
-        
-        // 注册Tile选中事件
-        this.node.on('tile-selected', this._onTileSelected, this);
-        
-        // 注册回合更新事件
-        this.node.on('turn-updated', this._onTurnUpdated, this);
-        
-        // 注册玩家切换事件
-        this.node.on('player-switched', this._onPlayerSwitched, this);
-        
-        // 注册玩家被击败事件
-        this.node.on('player-defeated', this._onPlayerDefeated, this);
-        
-        // 注册游戏结束事件
-        this.node.on('game-over', this._onGameOver, this);
-        
-        // 注册结束回合按钮点击
+        // 设置游戏速度按钮点击事件
         if (this.endTurnButton) {
             this.endTurnButton.node.on(Button.EventType.CLICK, this._onEndTurnButtonClicked, this);
+            
+            // 更新按钮文本
+            const buttonLabel = this.endTurnButton.getComponentInChildren(Label);
+            if (buttonLabel) {
+                buttonLabel.string = `速度 x1`;
+            }
         }
         
-        // 注册派遣按钮点击事件
+        // 设置派遣按钮点击事件
         if (this.dispatchButton) {
-            console.log("LocalGameController: 派遣按钮已找到，正在注册点击事件");
-            this.dispatchButton.node.on('click', this._onDispatchButtonClicked, this);
-        } else {
-            console.error("LocalGameController: 派遣按钮未找到！请检查Inspector中的引用设置");
+            this.dispatchButton.node.on(Button.EventType.CLICK, this._onDispatchButtonClicked, this);
         }
         
-        // 在场景级别监听tile-selected事件
-        console.log("LocalGameController: 在Scene级别注册tile-selected事件");
+        // 监听格子选择事件
+        this.node.on('tile-selected', this._onTileSelected, this);
+        
+        // 在场景级别也监听格子选择事件
         director.getScene()?.on('tile-selected', (tile) => {
-            console.log(`LocalGameController: Scene级别收到tile-selected事件，tile位置：[${tile.gridPosition.x},${tile.gridPosition.y}]`);
             this._onTileSelected(tile);
         }, this);
+        
+        // 监听时间更新事件
+        this.node.on('time-updated', this._onTimeUpdated, this);
+        
+        // 监听玩家失败事件
+        this.node.on('player-defeated', this._onPlayerDefeated, this);
+        
+        // 监听游戏结束事件
+        this.node.on('game-over', this._onGameOver, this);
     }
     
     /**
@@ -273,11 +277,9 @@ export class LocalGameController extends Component {
     private _updateUI() {
         if (!this._playerManager) return;
         
-        // 更新回合显示
-        if (this.turnLabel) {
-            const currentTurn = this._turnManager?.getCurrentTurn() || 0;
-            this.turnLabel.string = `回合: ${currentTurn}`;
-        }
+        // 更新回合数显示
+        const gameTime = this._timeManager?.getGameTime() || 0;
+        this.turnLabel.string = `时间: ${Math.floor(gameTime)}秒`;
         
         // 更新当前玩家显示
         if (this.playerLabel) {
@@ -359,11 +361,11 @@ export class LocalGameController extends Component {
             // 第一条显示为"执行中"，其余显示为"排队中"
             if (index === 0) {
                 const currentStep = path.currentStep + 1; // +1是为了显示为从1开始而不是0
-                const totalSteps = path.targetTiles.length + 1; // +1是为了包括起始点
+                const totalSteps = path.pathTiles.length; // 完整路径的总步数
                 statusText = `执行中: 行军路线 (${currentStep}/${totalSteps})`;
                 statusColor = new Color(50, 200, 50, 255); // 绿色
             } else {
-                const totalSteps = path.targetTiles.length + 1;
+                const totalSteps = path.pathTiles.length;
                 statusText = `排队中: 行军路线 (${totalSteps})`;
                 statusColor = new Color(200, 150, 50, 255); // 橙色
             }
@@ -393,6 +395,35 @@ export class LocalGameController extends Component {
             return;
         }
         
+        // 无论是否在派遣模式，都让当前点击的tile短暂高亮
+        tile.setHighlight(true);
+        const highlightNode = tile.highlightNode;
+        if (highlightNode) {
+            // 获取或添加UIOpacity组件
+            let uiOpacity = highlightNode.getComponent(UIOpacity);
+            if (!uiOpacity) {
+                uiOpacity = highlightNode.addComponent(UIOpacity);
+            }
+            
+            // 设置短暂高亮效果
+            uiOpacity.opacity = 0;
+            highlightNode.active = true;
+            
+            tween(uiOpacity)
+                .to(0.1, { opacity: 255 }) // 快速淡入
+                .delay(0.3) // 短暂高亮
+                .to(0.2, { opacity: 0 }) // 缓慢淡出
+                .call(() => {
+                    // 如果不是选中的格子或目标格子，完全关闭高亮
+                    if (!this._isInDispatchMode && 
+                        (this._selectedTile !== tile) && 
+                        !this._targetTiles.some(pos => pos.x === tile.gridPosition.x && pos.y === tile.gridPosition.y)) {
+                        highlightNode.active = false;
+                    }
+                })
+                .start();
+        }
+        
         // 如果处于派遣模式，处理派遣逻辑
         if (this._isInDispatchMode) {
             console.log(`LocalGameController: 处于派遣模式，调用_handleDispatchModeSelection，剩余次数：${this._dispatchCount}`);
@@ -418,49 +449,56 @@ export class LocalGameController extends Component {
             if (tile.troops > 1) {
                 // 默认派遣一半兵力
                 this._troopsToSend = Math.floor(tile.troops / 2);
-                console.log(`默认派遣兵力: ${this._troopsToSend}`);
+                // 更新派遣按钮状态
+                this._updateDispatchButton();
             } else {
+                console.log(`格子兵力不足，无法派遣`);
                 this._troopsToSend = 0;
-                this._selectedTile = null;
-                this._targetTiles = [];
-                console.log("该格子兵力不足，无法派遣");
+                this._updateDispatchButton();
             }
-        }
-        // 选中目标格子
+        } 
+        // 选中目标格子 - 恢复这部分关键逻辑
         else if (this._selectedTile && this._targetTiles.some(pos => 
             pos.x === tile.gridPosition.x && pos.y === tile.gridPosition.y)) {
             
+            // 计算派遣兵力 - 尽可能多地派遣，只在原地留1个
+            const availableTroops = this._selectedTile.troops - 1;
+            this._troopsToSend = availableTroops > 0 ? availableTroops : 0;
+            
             // 派遣兵力到目标格子
-            if (this._troopsToSend > 0) {
-                this._troopManager?.sendTroops(
+            if (this._troopsToSend > 0 && this._troopManager) {
+                console.log(`派遣 ${this._troopsToSend} 兵力从 [${this._selectedTile.gridPosition.x},${this._selectedTile.gridPosition.y}] 到 [${tile.gridPosition.x},${tile.gridPosition.y}]`);
+                
+                this._troopManager.sendTroops(
                     this._selectedTile.gridPosition.x, 
                     this._selectedTile.gridPosition.y,
                     tile.gridPosition.x,
                     tile.gridPosition.y,
                     this._troopsToSend
                 );
-                
-                console.log(`派遣 ${this._troopsToSend} 兵力从 [${this._selectedTile.gridPosition.x},${this._selectedTile.gridPosition.y}] 到 [${tile.gridPosition.x},${tile.gridPosition.y}]`);
             }
+            
+            // 短暂高亮目标格子
+            tile.setHighlight(true);
             
             // 清除选择状态
             this._selectedTile = null;
             this._targetTiles = [];
             this._troopsToSend = 0;
+            this._updateDispatchButton();
             
             // 清除高亮显示
             this._clearHighlights();
         }
-        // 取消选择
         else {
+            // 点击其他格子，清除选择
             this._selectedTile = null;
             this._targetTiles = [];
             this._troopsToSend = 0;
+            this._updateDispatchButton();
             
-            // 清除高亮显示
+            // 清除高亮
             this._clearHighlights();
-            
-            console.log("取消选择");
         }
     }
     
@@ -597,99 +635,179 @@ export class LocalGameController extends Component {
      * 完成派遣模式
      */
     private _finishDispatchMode() {
-        console.log("in LocalGameController: 完成派遣模式");
+        console.log("========= 开始执行派遣模式完成操作 =========");
         
-        if (!this._mapManager || !this._troopManager || !this._playerManager) {
-            console.error("in LocalGameController: 缺少必要管理器引用，无法完成派遣");
+        if (!this._mapManager) {
+            console.error("地图管理器未初始化，取消派遣");
             this._cancelDispatchMode();
             return;
         }
         
-        // 至少需要2个点（起点和终点）
-        if (this._dispatchPath.length < 2) {
-            console.log("派遣模式：路径点不足，无法完成派遣");
+        if (!this._selectedTile) {
+            console.error("没有选择起始格子，取消派遣");
             this._cancelDispatchMode();
             return;
         }
         
-        console.log(`派遣模式：完成路径设置，共${this._dispatchPath.length}个点`);
+        if (this._dispatchPath.length === 0) {
+            console.error("派遣路径为空，取消派遣");
+            this._cancelDispatchMode();
+            return;
+        }
         
-        // 生成完整的行军路径
-        const finalPath: Vec2[] = [];
+        console.log(`派遣路径包含 ${this._dispatchPath.length} 个点:`);
+        this._dispatchPath.forEach((pos, index) => {
+            console.log(`路径点 ${index}: [${pos.x},${pos.y}]`);
+        });
         
-        // 计算相邻点之间的最短路径并连接
+        // 计算完整的行军路径，将选择的关键点连接起来
+        const completePathWithDuplicates: Vec2[] = [];
+        
+        // 添加起始点
+        completePathWithDuplicates.push(this._dispatchPath[0]);
+        
+        // 计算相邻点之间的最短路径
+        console.log("计算中间路径连接点...");
         for (let i = 0; i < this._dispatchPath.length - 1; i++) {
-            const start = this._dispatchPath[i];
-            const end = this._dispatchPath[i + 1];
+            const startPoint = this._dispatchPath[i];
+            const endPoint = this._dispatchPath[i + 1];
             
-            // 计算这两点之间的最短路径
-            const segmentPath = this._calculatePathBetweenPoints(start, end);
+            console.log(`计算从 [${startPoint.x},${startPoint.y}] 到 [${endPoint.x},${endPoint.y}] 的路径`);
             
-            // 添加到最终路径，但去掉重复的连接点
-            if (i > 0) {
-                // 去掉第一个点，因为它已经在前一段的最后
-                finalPath.push(...segmentPath.slice(1));
-            } else {
-                finalPath.push(...segmentPath);
+            // 使用Dijkstra算法计算两点间的最短路径
+            const segmentPath = this._calculatePathBetweenPoints(startPoint, endPoint);
+            
+            console.log(`计算的路径段包含 ${segmentPath.length} 个点`);
+            
+            // 添加中间路径点（跳过第一个点，避免重复）
+            for (let j = 1; j < segmentPath.length; j++) {
+                completePathWithDuplicates.push(segmentPath[j]);
             }
         }
         
-        // 截断路径如果超过20个点
-        const maxPathLength = 20;
-        if (finalPath.length > maxPathLength) {
-            console.log(`路径过长(${finalPath.length})，截断为${maxPathLength}个点`);
-            finalPath.splice(maxPathLength);
+        // 去重，移除连续重复的点
+        const completePath: Vec2[] = [];
+        for (let i = 0; i < completePathWithDuplicates.length; i++) {
+            const currentPoint = completePathWithDuplicates[i];
+            
+            // 添加第一个点或与前一个点不同的点
+            if (i === 0 || 
+                currentPoint.x !== completePathWithDuplicates[i-1].x || 
+                currentPoint.y !== completePathWithDuplicates[i-1].y) {
+                completePath.push(new Vec2(currentPoint.x, currentPoint.y));
+            }
         }
         
-        console.log(`in LocalGameController: 最终行军路径包含${finalPath.length}个点`);
+        console.log(`完整行军路径计算完成，包含 ${completePath.length} 个点:`);
+        completePath.forEach((pos, index) => {
+            console.log(`完整路径点 ${index}: [${pos.x},${pos.y}]`);
+        });
         
-        // 获取起始点的兵力
-        const startPos = finalPath[0];
-        const startTile = this._mapManager?.getTile(startPos.x, startPos.y);
-        
-        if (!startTile) {
-            console.error("in LocalGameController: 派遣模式：起始点无效");
+        // 创建行军路径
+        if (this._troopManager && this._playerManager) {
+            // 获取选中格子的当前兵力
+            const currentTroops = this._selectedTile.troops;
+            console.log(`起始格子当前兵力: ${currentTroops}`);
+            
+            // 检查兵力是否够派遣（至少需要2个兵力才能派遣）
+            if (currentTroops <= 1) {
+                console.error("格子兵力不足，无法派遣，需要至少2个兵力");
+                this._cancelDispatchMode();
+                return;
+            }
+            
+            // 如果_troopsToSend未设置，设为最大可能值(当前兵力-1)
+            if (this._troopsToSend <= 0) {
+                this._troopsToSend = currentTroops - 1;
+                console.log(`自动设置派遣兵力为最大值: ${this._troopsToSend}（当前兵力-1）`);
+            }
+            
+            // 确保不超过当前兵力减1（始终在原地保留1个兵力）
+            const troopsToSend = Math.min(this._troopsToSend, currentTroops - 1);
+            console.log(`最终派遣兵力: ${troopsToSend}，原地将保留1个兵力`);
+            
+            // 去掉起始点，只保留目标路径
+            const targetPath = completePath.slice(1);
+            console.log(`最终目标路径包含 ${targetPath.length} 个点`);
+            
+            // 确保创建前所有参数正确
+            const playerId = this._playerManager.getCurrentPlayer()?.id;
+            if (playerId === undefined) {
+                console.error("无法获取当前玩家ID，取消派遣");
+                this._cancelDispatchMode();
+                return;
+            }
+            
+            console.log(`创建行军路径：玩家ID=${playerId}, 起点=[${this._selectedTile.gridPosition.x},${this._selectedTile.gridPosition.y}], 目标点数=${targetPath.length}, 派遣兵力=${troopsToSend}`);
+            
+            // 创建行军路径
+            this._troopManager.createMarchingPath(
+                playerId,
+                this._selectedTile.gridPosition,
+                targetPath,
+                troopsToSend
+            );
+            
+            console.log(`行军路径创建成功！从 [${this._selectedTile.gridPosition.x},${this._selectedTile.gridPosition.y}] 派遣 ${troopsToSend} 兵力`);
+            
+            // 减少剩余派遣次数
+            this._dispatchCount--;
+            
+            // 更新UI显示
+            this._updateUI();
+            
+            // 更新行军状态面板
+            this._updateMarchingStatus();
+        } else {
+            console.error("部队管理器或玩家管理器未初始化，取消派遣");
             this._cancelDispatchMode();
             return;
         }
         
-        // 获取当前玩家ID
-        const currentPlayerId = this._playerManager.getCurrentPlayer()?.id ?? -1;
-        
-        // 计算派遣兵力（源格子兵力-1）
-        const availableTroops = Math.max(0, startTile.troops - 1); // 保留1个兵力在原地
-        //const troopsToSend = Math.min(Math.floor(startTile.troops / 2), availableTroops);
-        const troopsToSend = availableTroops;
-        
-        if (troopsToSend <= 0) {
-            console.error(`in LocalGameController: 派遣模式：起始格子兵力不足，当前兵力${startTile.troops}`);
-            this._cancelDispatchMode();
-            return;
+        // 短暂高亮显示最终目标格子
+        if (this._dispatchPath.length > 1) {
+            const finalPos = this._dispatchPath[this._dispatchPath.length - 1];
+            const finalTile = this._mapManager.getTile(finalPos.x, finalPos.y);
+            if (finalTile) {
+                finalTile.setHighlight(true);
+                const highlightNode = finalTile.highlightNode;
+                if (highlightNode) {
+                    // 获取或添加UIOpacity组件
+                    let uiOpacity = highlightNode.getComponent(UIOpacity);
+                    if (!uiOpacity) {
+                        uiOpacity = highlightNode.addComponent(UIOpacity);
+                    }
+                    
+                    // 设置短暂高亮效果
+                    uiOpacity.opacity = 0;
+                    highlightNode.active = true;
+                    
+                    tween(uiOpacity)
+                        .to(0.1, { opacity: 255 }) // 快速淡入
+                        .delay(0.5) // 保持高亮0.5秒
+                        .to(0.2, { opacity: 0 }) // 缓慢淡出
+                        .call(() => {
+                            highlightNode.active = false;
+                        })
+                        .start();
+                }
+            }
         }
         
-        console.log(`in LocalGameController: 派遣模式：从 [${startPos.x},${startPos.y}] 派遣 ${troopsToSend} 兵力`);
-        
-        // 创建行军路径，这里会调用TroopManager的createMarchingPath方法
-        this._troopManager.createMarchingPath(
-            currentPlayerId,
-            startPos,
-            finalPath.slice(1), // 移除起始点，因为它在createMarchingPath中会被单独处理
-            troopsToSend
-        );
-        console.log(`in LocalGameController: 派遣模式：创建行军路径完成`);
-        // 清除派遣模式状态
+        // 重置派遣模式状态
         this._isInDispatchMode = false;
+        this._selectedTile = null;
+        this._targetTiles = [];
+        this._troopsToSend = 0;
         this._dispatchPath = [];
-        this._dispatchCount = this._maxDispatchCount;
         
-        // 恢复按钮状态
-        this._updateDispatchButton();
-        
-        // 清除高亮显示
+        // 清除所有高亮
         this._clearHighlights();
         
-        // 更新行军状态面板
-        this._updateMarchingStatus();
+        // 更新派遣按钮状态
+        this._updateDispatchButton();
+        
+        console.log("========= 派遣模式完成操作结束 =========");
     }
     
     /**
@@ -723,22 +841,85 @@ export class LocalGameController extends Component {
     private _highlightTargetTiles() {
         if (!this._mapManager) return;
         
-        // 高亮选中的格子
+        // 渐变高亮选中的格子
         if (this._selectedTile) {
+            // 设置高亮，但不立即激活highlightNode
             this._selectedTile.setHighlight(true);
+            
+            // 查找高亮节点，TileComponent中的setHighlight方法会设置highlightNode.active = true
+            const highlightNode = this._selectedTile.highlightNode;
+            if (highlightNode) {
+                // 获取或添加UIOpacity组件
+                let uiOpacity = highlightNode.getComponent(UIOpacity);
+                if (!uiOpacity) {
+                    uiOpacity = highlightNode.addComponent(UIOpacity);
+                }
+                
+                // 停止任何可能正在进行的动画
+                Tween.stopAllByTarget(uiOpacity);
+                
+                // 设置初始透明度为0
+                uiOpacity.opacity = 0;
+                highlightNode.active = true;
+                
+                // 添加淡入淡出效果
+                tween(uiOpacity)
+                    .to(0.1, { opacity: 255 }) // 0.1秒内渐变至完全不透明
+                    .delay(0.5) // 保持高亮0.5秒
+                    .to(0.2, { opacity: 0 }) // 0.2秒内淡出
+                    .call(() => {
+                        // 如果不在派遣模式且不是当前选中的格子，则关闭高亮
+                        if (!this._isInDispatchMode && !this._selectedTile) {
+                            highlightNode.active = false;
+                        }
+                    })
+                    .start();
+            }
         }
         
-        // 高亮可移动的目标格子
-        for (const pos of this._targetTiles) {
-            const tile = this._mapManager.getTile(pos.x, pos.y);
-            if (tile) {
-                tile.setHighlight(true);
+        // 在派遣模式下或有选中格子时，高亮显示目标格子
+        if (this._targetTiles.length > 0) {
+            for (const pos of this._targetTiles) {
+                const tile = this._mapManager.getTile(pos.x, pos.y);
+                if (tile) {
+                    tile.setHighlight(true);
+                    
+                    const highlightNode = tile.highlightNode;
+                    if (highlightNode) {
+                        // 获取或添加UIOpacity组件
+                        let uiOpacity = highlightNode.getComponent(UIOpacity);
+                        if (!uiOpacity) {
+                            uiOpacity = highlightNode.addComponent(UIOpacity);
+                        }
+                        
+                        // 停止任何可能正在进行的动画
+                        Tween.stopAllByTarget(uiOpacity);
+                        
+                        // 设置初始透明度为0
+                        uiOpacity.opacity = 0;
+                        highlightNode.active = true;
+                        
+                        // 渐变效果
+                        tween(uiOpacity)
+                            .to(0.1, { opacity: 255 }) // 快速淡入
+                            .delay(0.5) // 保持高亮0.5秒
+                            .to(0.2, { opacity: 0 }) // 缓慢淡出
+                            .call(() => {
+                                // 如果不在派遣模式且不是目标格子，则关闭高亮
+                                if (!this._isInDispatchMode && 
+                                    !this._targetTiles.some(p => p.x === pos.x && p.y === pos.y)) {
+                                    highlightNode.active = false;
+                                }
+                            })
+                            .start();
+                    }
+                }
             }
         }
     }
     
     /**
-     * 清除所有高亮显示
+     * 清除所有格子的高亮显示
      */
     private _clearHighlights() {
         if (!this._mapManager) return;
@@ -749,7 +930,26 @@ export class LocalGameController extends Component {
             for (let x = 0; x < mapSize.width; x++) {
                 const tile = this._mapManager.getTile(x, y);
                 if (tile) {
-                    tile.setHighlight(false);
+                    const highlightNode = tile.highlightNode;
+                    
+                    if (highlightNode && highlightNode.active) {
+                        // 获取或添加UIOpacity组件
+                        let uiOpacity = highlightNode.getComponent(UIOpacity);
+                        if (!uiOpacity) {
+                            uiOpacity = highlightNode.addComponent(UIOpacity);
+                        }
+                        
+                        // 停止任何可能正在进行的动画
+                        Tween.stopAllByTarget(uiOpacity);
+                        
+                        // 渐变消失效果
+                        tween(uiOpacity)
+                            .to(0.1, { opacity: 0 }) // 0.1秒内渐变至完全透明
+                            .call(() => {
+                                highlightNode.active = false; // 动画完成后隐藏节点
+                            })
+                            .start();
+                    }
                 }
             }
         }
@@ -804,7 +1004,7 @@ export class LocalGameController extends Component {
         if (!this._playerManager) return;
         
         this._gameOver = true;
-        this._turnManager?.pauseTurnLoop();
+        this._timeManager?.pauseGame();
         
         const winner = this._playerManager.getPlayerById(winnerId);
         if (winner) {
@@ -817,10 +1017,15 @@ export class LocalGameController extends Component {
      * 结束回合按钮点击处理
      */
     private _onEndTurnButtonClicked() {
-        if (!this._gameStarted || this._gameOver || !this._turnManager) return;
+        if (!this._gameStarted || this._gameOver || !this._timeManager) return;
         
-        // 切换到下一个玩家
-        this._turnManager.switchToNextPlayer();
+        // 在实时模式下，此按钮可用于切换游戏速度
+        const currentSpeed = this._timeManager.getGameSpeed();
+        const newSpeed = currentSpeed >= 4 ? 1 : currentSpeed * 2;
+        this._timeManager.setGameSpeed(newSpeed);
+        
+        // 更新按钮显示
+        this.endTurnButton.getComponentInChildren(Label)!.string = `速度 x${newSpeed}`;
     }
     
     /**
@@ -842,6 +1047,19 @@ export class LocalGameController extends Component {
             // 如果至少有起始点和一个目标点，完成路径设置
             if (this._dispatchPath.length >= 2) {
                 console.log(`in LocalGameController: 已选择${this._dispatchPath.length}个点，完成路径计算并执行`);
+                
+                // 计算派遣的兵力数量（最大可能：当前兵力-1）
+                if (this._dispatchPath.length > 0 && this._mapManager) {
+                    const startPos = this._dispatchPath[0];
+                    const startTile = this._mapManager.getTile(startPos.x, startPos.y);
+                    if (startTile && startTile.troops > 1) {
+                        // 修改: 派遣兵力为(当前兵力-1)，而不是一半
+                        this._troopsToSend = startTile.troops - 1;
+                        console.log(`设置派遣兵力为: ${this._troopsToSend}，起始点兵力: ${startTile.troops}，起始点将保留1个兵力`);
+                        this._selectedTile = startTile; // 确保设置了选中的格子
+                    }
+                }
+                
                 this._finishDispatchMode(); // 执行路径规划和行军
             } else if (this._dispatchPath.length === 1) {
                 // 如果只有起始点但没有目标点，提醒玩家
@@ -923,11 +1141,29 @@ export class LocalGameController extends Component {
     }
     
     /**
-     * 每帧更新
+     * 时间更新事件处理
+     */
+    private _onTimeUpdated(gameTime: number) {
+        // 更新UI显示
+        this._updateUI();
+        
+        // 每隔30秒保存游戏状态
+        if (Math.floor(gameTime) % 30 === 0) {
+            // 这里可以实现游戏存档功能
+        }
+    }
+    
+    /**
+     * 游戏主循环更新
      */
     update(dt: number) {
-        // 如果游戏未开始或已结束，则不执行更新
         if (!this._gameStarted || this._gameOver) return;
+        
+        // 检查初始化状态
+        if (!this._mapManager || !this._playerManager || !this._timeManager || !this._troopManager) {
+            console.error("游戏组件未完全初始化");
+            return;
+        }
         
         // 更新行军状态面板
         this._updateMarchingStatus();

@@ -54,6 +54,54 @@ export class AIManager extends Component {
     }
     
     /**
+     * 实时处理AI逻辑
+     * 根据时间增量更新AI决策
+     * @param deltaTime 时间增量（秒）
+     */
+    processAILogic(deltaTime: number): void {
+        if (!this._mapManager || !this._playerManager || !this._troopManager) return;
+        
+        // 更新每个AI玩家的决策计时器
+        const aiPlayers = this._playerManager.getPlayers().filter(player => player.isAI && !player.defeated);
+        
+        aiPlayers.forEach(aiPlayer => {
+            // 更新AI决策计时器
+            if (!aiPlayer.decisionTimer) {
+                aiPlayer.decisionTimer = this._getDecisionInterval(aiPlayer.aiLevel || 1);
+            }
+            
+            aiPlayer.decisionTimer -= deltaTime;
+            
+            // 当计时器归零时，执行AI决策
+            if (aiPlayer.decisionTimer <= 0) {
+                // 重置计时器
+                aiPlayer.decisionTimer = this._getDecisionInterval(aiPlayer.aiLevel || 1);
+                
+                // 执行AI行动
+                this.handleAIAction(aiPlayer);
+            }
+        });
+    }
+    
+    /**
+     * 获取基于AI难度的决策间隔时间
+     * @param aiLevel AI难度等级
+     * @returns 决策间隔时间（秒）
+     */
+    private _getDecisionInterval(aiLevel: number): number {
+        switch (aiLevel) {
+            case 1: // 简单 - 较长决策间隔（3-5秒）
+                return 3 + Math.random() * 2;
+            case 2: // 中等 - 中等决策间隔（2-3秒）
+                return 2 + Math.random();
+            case 3: // 困难 - 较短决策间隔（1-2秒）
+                return 1 + Math.random();
+            default:
+                return 3;
+        }
+    }
+    
+    /**
      * 执行简单AI策略
      * 简单AI: 防守型，兵力分散，随机选择目标
      */

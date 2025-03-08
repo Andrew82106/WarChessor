@@ -301,8 +301,20 @@ export class TileComponent extends Component {
         // 查找高亮节点
         const highlightNode = this.node.getChildByName('Highlight');
         if (highlightNode) {
-            //console.log(`TileComponent: 找到Highlight节点，设置激活状态为${highlight}`);
+            // 确保高亮节点总是能被激活，无论tile的状态或所有权
             highlightNode.active = highlight;
+            
+            // 根据方块类型调整高亮颜色
+            const highlightSprite = highlightNode.getComponent(Sprite);
+            if (highlightSprite) {
+                if (this._ownerId !== -1) {
+                    // 有主方块使用深色高亮
+                    highlightSprite.color = new Color(255, 255, 255, 180);
+                } else {
+                    // 无主方块使用亮色高亮，确保更明显
+                    highlightSprite.color = new Color(255, 255, 255, 220);
+                }
+            }
         } else {
             console.warn(`Tile [${this._gridPosition.x},${this._gridPosition.y}] 无法找到Highlight节点`);
         }
