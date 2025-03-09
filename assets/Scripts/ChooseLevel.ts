@@ -3,7 +3,7 @@ const { ccclass, property } = _decorator;
 
 // 定义关卡数据接口
 interface LevelData {
-    id: number;           // 关卡ID
+    id: number | string;  // 关卡ID可以是数字或字符串
     name: string;         // 关卡名称
     description: string;  // 关卡描述
     difficulty: number;   // 难度等级 (1-5)
@@ -125,6 +125,18 @@ export class ChooseLevel extends Component {
      * 设置关卡项目的内容
      */
     setupLevelItem(item: Node, data: LevelData) {
+        // 设置关卡ID
+        const levelItem = item.getComponent('LevelItem');
+        if (levelItem) {
+            // 检查ID是否为字符串格式的"level1"，如果是则提取数字部分
+            let numericId = typeof data.id === 'number' ? data.id : 1;
+            if (typeof data.id === 'string' && data.id.startsWith('level')) {
+                numericId = parseInt(data.id.replace('level', ''), 10);
+            }
+            // 使用类型断言
+            (levelItem as any).setLevelId(numericId);
+        }
+
         // 设置关卡名称
         const nameLabel = item.getChildByName('NameLabel')?.getComponent(Label);
         if (nameLabel) {
@@ -155,7 +167,12 @@ export class ChooseLevel extends Component {
             // 只有已解锁且已开发的关卡才可点击
             startButton.interactable = data.unlocked && data.developed;
             startButton.node.on(Button.EventType.CLICK, () => {
-                this.onLevelSelected(data.id, data.developed);
+                // 获取关卡的数字ID
+                let numId = typeof data.id === 'number' ? data.id : 1;
+                if (typeof data.id === 'string' && data.id.startsWith('level')) {
+                    numId = parseInt(data.id.replace('level', ''), 10);
+                }
+                this.onLevelSelected(numId, data.developed);
             }, this);
         }
 
@@ -200,8 +217,33 @@ export class ChooseLevel extends Component {
             return;
         }
         
-        // TODO: 这里应该跳转到游戏场景，并传递关卡ID
-        // director.loadScene('Game', { levelId });
+        // 播放按钮音效（如果有）
+        if (this.buttonClickSound) {
+            this.buttonClickSound.play();
+        }
+        
+        // 根据关卡ID准备参数
+        // 所有关卡都使用'levelX'格式
+        const levelParam = `level${levelId}`;
+        
+        // 跳转到游戏场景，并传递关卡ID
+        console.log(`加载LocalGame场景，关卡参数: ${levelParam}`);
+        director.loadScene('LocalGame', (err, scene) => {
+            if (err) {
+                console.error('加载场景失败:', err);
+                return;
+            }
+            
+            // 找到LocalGameController组件并设置当前关卡ID
+            const gameController = scene.getComponentInChildren('LocalGameController');
+            if (gameController) {
+                // 使用类型断言来设置属性
+                (gameController as any).currentLevelId = levelParam;
+                console.log(`成功设置关卡ID: ${levelParam}`);
+            } else {
+                console.error('未找到LocalGameController组件');
+            }
+        });
     }
 
     /**
