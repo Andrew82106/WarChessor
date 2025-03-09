@@ -29,7 +29,7 @@ export class LocalGameController extends Component {
     playerLabel: Label = null!;
     
     @property(Button)
-    endTurnButton: Button = null!;
+    SpeedButton: Button = null!;
     
     @property(Button)
     dispatchButton: Button = null!;  // 派遣按钮
@@ -88,6 +88,26 @@ export class LocalGameController extends Component {
      * 组件加载时调用
      */
     onLoad() {
+        /*
+        在Cocos Creator中，`onLoad`函数和`start`函数的执行顺序是固定的。具体来说，`onLoad`函数会在组件被加载时首先执行，而`start`函数会在组件的所有`onLoad`函数执行完毕后执行。
+
+        ### 执行顺序：
+        1. **`onLoad`**：
+        - 当节点被添加到场景中时，所有组件的`onLoad`方法会被调用。
+        这个方法通常用于初始化组件的状态、设置事件监听器、加载资源等。
+        - 在`onLoad`中，组件的属性已经被赋值，但其他组件的`onLoad`方法尚未执行。
+
+        2. **`start`**：
+        - 在所有组件的`onLoad`方法执行完毕后，Cocos Creator会调用每个组件的`start`方法。
+        这个方法通常用于在游戏开始时执行一些逻辑，比如开始游戏、初始化游戏状态等。
+        - 在`start`中，所有其他组件的`onLoad`方法都已经执行完毕，因此可以安全地访问其他组件的状态和数据。
+
+        ### 总结：
+        因此，在你的代码中，`onLoad`函数会先执行，然后是`start`函数。
+        这种设计确保了在`start`中可以安全地使用在`onLoad`中初始化的状态和数据。
+
+        */
+
         // 初始化管理器
         this._initManagers();
         
@@ -115,11 +135,11 @@ export class LocalGameController extends Component {
         // 初始化玩家
         this._playerManager?.initPlayers(this._levelData.players);
         // 获取关卡数据
-        console.log("======== 开始初始化玩家 ========");
-        console.log(`关卡 ${this._levelData.name} 包含 ${this._levelData.players.length} 个玩家:`);
-        this._levelData.players.forEach((player, index) => {
-            console.log(`玩家 ${index+1}: ID=${player.id}, 名称=${player.name}, 是否AI=${player.isAI}`);
-        });
+        //console.log("======== 开始初始化玩家 ========");
+        //console.log(`关卡 ${this._levelData.name} 包含 ${this._levelData.players.length} 个玩家:`);
+        //this._levelData.players.forEach((player, index) => {
+        //    console.log(`玩家 ${index+1}: ID=${player.id}, 名称=${player.name}, 是否AI=${player.isAI}`);
+        //});
         
         // 初始化地图
         const mapInitialized = await this._mapManager?.initMap();
@@ -137,17 +157,17 @@ export class LocalGameController extends Component {
         
         // 设置大本营位置
         if (this._levelData.mapData.headquarters) {
-            console.log("【大本营】开始设置玩家大本营位置...");
+            // console.log("【大本营】开始设置玩家大本营位置...");
             this._levelData.mapData.headquarters.forEach(hq => {
                 const playerId = hq[0];
                 const x = hq[1];
                 const y = hq[2];
-                console.log(`【大本营】玩家${playerId}的大本营位置设为[${x},${y}]`);
+                // console.log(`【大本营】玩家${playerId}的大本营位置设为[${x},${y}]`);
                 this._playerManager?.setPlayerHeadquarters(playerId, new Vec2(x, y));
             });
         }
         
-        // 确保地图数据应用到每个格子
+        // 确保地图数据中的所有权数据应用到每个格子
         //console.log("in LocalGameController start function, 应用地图所有权数据到格子...");
         if (this._mapManager && this._levelData.mapData.ownership) {
             for (let y = 0; y < this._mapManager.getMapSize().height; y++) {
@@ -177,39 +197,15 @@ export class LocalGameController extends Component {
         
         // 启动兵力增长计时器 - 每5秒增加一次兵力
         this.schedule(this._increaseTroops, 5);
-        
-        // 检查所有Tile的显示状态
-        this.scheduleOnce(() => {
-            //console.log("in LocalGameController start function, 强制检查所有Tile的显示状态...");
-            if (this._mapManager) {
-                // 获取摄像机信息
-                const camera = director.getScene()?.getComponentInChildren(Camera);
-                //console.log(`摄像机信息: 位置=${camera?.node.position}, 正交高度=${camera?.orthoHeight}`);
-                
-                // 遍历所有格子
-                for (let y = 0; y < this._mapManager.getMapSize().height; y++) {
-                    for (let x = 0; x < this._mapManager.getMapSize().width; x++) {
-                        const tile = this._mapManager.getTile(x, y);
-                        if (tile) {
-                            // 强制设置可见
-                            //tile.isVisible = true;
-                            //if (tile.fogNode) tile.fogNode.active = false;
-                            //tile.node.active = true;
-                            
-                            // 设置橙色背景
-                            //if (tile.background) {
-                            //    tile.background.color = new Color(255, 165, 0, 255);
-                            //}
-                            
-                            // 设置兵力显示
-                            //tile.troops = (x + y) % 5 + 1;
-                            
-                            //console.log(`检查Tile [${x},${y}]: 激活=${tile.node.active}, 位置=${tile.node.position}`);
-                        }
-                    }
-                }
-            }
-        }, 1.0);
+        /*
+        逐部分解释：
+            this.schedule(...)：
+            schedule是Cocos Creator中的一个方法，用于在指定的时间间隔内重复调用某个函数。它会在每个游戏帧更新时检查是否到了调用该函数的时间。
+            this._increaseTroops：
+            这是一个方法，通常用于处理兵力的增长逻辑。具体的实现可能在LocalGameController类中定义。这个方法会在每次定时器触发时被调用。
+            5：
+            这是时间间隔，单位是秒。意味着每5秒钟，_increaseTroops方法会被调用一次。
+        */
     }
     
     /**
@@ -218,6 +214,32 @@ export class LocalGameController extends Component {
     private _initManagers() {
         // 创建地图管理器
         this._mapManager = this.getComponent(MapManager) || this.addComponent(MapManager);
+        /*
+        逐部分解释：
+            this.getComponent(MapManager)：
+            这个方法尝试从当前组件（LocalGameController）中获取名为MapManager的组件实例。
+            如果当前组件上已经存在MapManager，则返回该实例；如果不存在，则返回null。
+
+            ||（逻辑或运算符）：
+            这是一个逻辑或运算符，用于在左侧表达式为null或undefined时，返回右侧的表达式。
+            在这里，如果this.getComponent(MapManager)返回null（即当前组件上没有MapManager），
+            则会执行右侧的代码。
+            
+            this.addComponent(MapManager)：
+            如果左侧的getComponent返回null，则调用addComponent(MapManager)方法来添加一个新的MapManager组件到当前组件上。
+            这个方法会创建一个新的MapManager实例，并将其附加到当前节点（LocalGameController的节点）上。
+            
+            this._mapManager = ...：
+            最终，无论是通过getComponent获取的现有实例，还是通过addComponent创建的新实例，都会被赋值给this._mapManager属性。
+            这样，_mapManager就可以在LocalGameController类的其他方法中使用，方便管理地图相关的逻辑。
+            
+            总结：
+            这行代码的主要目的是确保LocalGameController类中始终有一个有效的MapManager实例。
+            通过这种方式，LocalGameController可以安全地调用MapManager的方法和属性，而不必担心_mapManager为null的情况。
+            这种设计模式在Cocos Creator中非常常见，确保了组件之间的依赖关系能够正确建立。
+
+            实际上，cocos中我们也并没有加入MapManager组件，而是通过这里的代码来实现地图管理器的功能。
+        */
         
         // 创建玩家管理器
         this._playerManager = this.getComponent(PlayerManager) || this.addComponent(PlayerManager);
@@ -231,9 +253,12 @@ export class LocalGameController extends Component {
         // 创建AI管理器
         this._aiManager = this.getComponent(AIManager) || this.addComponent(AIManager);
         
+        // 这些管理器都是用脚本挂载上去的，所以上面用了这么多||
+        // 每一个Manager其实都是一个脚本，写在Scripts下的managers文件夹中
+
         // 设置管理器之间的引用关系
         if (this._mapManager && this._playerManager && this._timeManager && this._troopManager && this._aiManager) {
-            // 将管理器与地图容器关联
+            // 将管理器与地图容器以及地图格子预制体关联
             this._mapManager.mapContainer = this.mapContainer;
             this._mapManager.tilePrefab = this.tilePrefab;
             
@@ -241,11 +266,13 @@ export class LocalGameController extends Component {
             this._timeManager.setManagers(this._playerManager, this._troopManager, this._aiManager);
             this._troopManager.setManagers(this._mapManager, this._playerManager);
             this._aiManager.setManagers(this._mapManager, this._playerManager, this._troopManager);
+            // 设置好引用后这些管理器才能相互共通状态
             
             // 设置游戏规则
             if (this._levelData) {
                 this._timeManager.setGameRules(this._levelData.gameRules);
             }
+            // 这里面还重置了计时器，所以要放在setManagers之后
         }
     }
     
@@ -254,8 +281,8 @@ export class LocalGameController extends Component {
      */
     private _setupEventListeners() {
         // 设置结束回合按钮点击事件
-        if (this.endTurnButton) {
-            this.endTurnButton.node.on(Button.EventType.CLICK, this._onEndTurnButtonClicked, this);
+        if (this.SpeedButton) {
+            this.SpeedButton.node.on(Button.EventType.CLICK, this._onSpeedUpTurnButtonClicked, this);
         }
         
         // 设置派遣按钮点击事件
@@ -271,6 +298,34 @@ export class LocalGameController extends Component {
         if (scene) {
             scene.on('tile-selected', this._onTileSelected, this);
         }
+        /*
+        逐部分解释：
+            const scene = director.getScene();：
+            这行代码通过director.getScene()方法获取当前活动的场景实例。
+            director是Cocos Creator中的一个全局对象，负责管理场景的生命周期和状态。
+
+            if (scene) { ... }：
+            这个条件语句检查是否成功获取到场景实例。如果场景存在，则执行后续的代码。
+
+            scene.on('tile-selected', this._onTileSelected, this);：
+            这行代码为场景注册了一个事件监听器，监听名为"tile-selected"的事件。
+            当"tile-selected"事件被触发时，this._onTileSelected方法将被调用。
+            this参数确保在事件处理函数中，this的上下文仍然指向当前的LocalGameController实例。
+            这是重要的，因为事件处理函数需要访问类的属性和方法。
+
+            事件的作用：
+            "tile-selected"事件通常是在用户选择某个地块（tile）时触发的。
+            通过在场景级别监听这个事件，LocalGameController可以确保无论用户在场景的哪个部分选择地块，
+            都能正确处理这个选择。
+            这使得游戏的交互更加灵活和响应迅速，确保用户的操作能够被及时捕获并处理。
+            
+            总结：
+            这段代码的主要目的是在游戏场景中设置一个全局的事件监听器，
+            以便能够捕获用户选择地块的操作，并通过调用_onTileSelected方法来处理相应的逻辑。
+            这种设计模式在Cocos Creator中非常常见，能够有效地管理和响应用户的输入。
+
+            把场景级别监听去掉之后就点不动了反正
+        */
         
         // 监听时间更新事件
         this.node.on('time-updated', this._onTimeUpdated, this);
@@ -281,7 +336,7 @@ export class LocalGameController extends Component {
         
         // 监听地块所有权变更事件，检查是否影响大本营
         this.node.on('tile-ownership-changed', (data) => {
-            console.log(`【大本营】接收到地块所有权变更事件: 坐标[${data.x},${data.y}], 从玩家${data.oldOwnerId}变为玩家${data.newOwnerId}`);
+            // console.log(`【大本营】接收到地块所有权变更事件: 坐标[${data.x},${data.y}], 从玩家${data.oldOwnerId}变为玩家${data.newOwnerId}`);
             
             // 当任何地块所有权变更时，主动检查一次游戏结束条件
             this._checkGameEndCondition();
@@ -290,6 +345,35 @@ export class LocalGameController extends Component {
             this._updatePlayerOwnedTiles();
             this._updatePlayerStats();
         });
+        /*
+        逐部分解释：
+            this.node.on('tile-ownership-changed', (data) => { ... });：
+            这行代码为当前节点（LocalGameController的节点）注册了一个事件监听器，
+            监听名为"tile-ownership-changed"的事件。
+            当这个事件被触发时，后面的箭头函数将被调用，并接收一个参数data，
+            该参数通常包含有关地块所有权变更的信息。
+            
+            // console.log(...)：
+            这行代码被注释掉了，原本用于输出地块所有权变更的详细信息，包括地块的坐标、旧的所有者ID和新的所有者ID。
+            这可以帮助开发者调试和跟踪地块所有权的变化。
+            
+            this._checkGameEndCondition();：
+            这行代码调用了_checkGameEndCondition方法，检查游戏是否满足结束条件。
+            例如，如果某个玩家的大本营被占领，游戏可能会结束。通过在地块所有权变更时检查游戏状态，可以及时响应游戏的变化。
+            
+            this._updatePlayerOwnedTiles();：
+            这行代码调用了_updatePlayerOwnedTiles方法，更新所有玩家的拥有地块列表。
+            当地块的所有权发生变化时，玩家的地块拥有情况也需要更新，以确保游戏状态的准确性。
+            
+            this._updatePlayerStats();：
+            this行代码调用了_updatePlayerStats方法，更新玩家的状态信息。
+            这可能包括玩家的兵力、地块数量等信息，以便在UI上正确显示。
+            
+            总结：
+            这段代码的主要目的是在地块所有权发生变化时，自动检查游戏结束条件，并更新玩家的地块拥有情况和状态信息。
+            这种设计确保了游戏状态的实时更新，使得玩家能够及时看到游戏的变化，并且能够正确响应游戏的进程。
+            通过监听事件并执行相应的逻辑，增强了游戏的互动性和动态性。
+        */
         
         // 监听行军状态变化事件，及时更新玩家状态
         this.node.on('marching-status-updated', () => {
@@ -413,7 +497,7 @@ export class LocalGameController extends Component {
      * @returns 创建的状态项节点
      */
     private _createMarchingStatusItem(text: string, color: Color): Node {
-        // 实例化预制体
+        // 实例化行军路线预制体，这个预制体就叫做marchingStatusItemPrefab
         const item = instantiate(this.marchingStatusItemPrefab);
         
         // 获取Label组件并设置文本和颜色
@@ -441,92 +525,96 @@ export class LocalGameController extends Component {
      * 更新行军状态面板
      */
     private _updateMarchingStatus() {
-        if (!this.marchingStatusPanel || !this.marchingStatusItemPrefab || !this._troopManager) {
-            console.error("LocalGameController: 行军状态面板或预制体未设置，无法更新行军状态");
-            return;
-        }
-        
-        // 清除现有状态项
-        this.marchingStatusPanel.removeAllChildren();
         //console.log("LocalGameController: 更新行军状态面板");
         
         // 获取所有行军路径
-        const marchingPaths = this._troopManager.getMarchingPaths();
-        //console.log(`当前行军路径数量: ${marchingPaths.length}`);
+        const marchingPathsMap = this._troopManager.getMarchingPaths();
+        //console.log(`当前行军路径数量: ${marchingPathsMap.size} 个玩家队列`);
         
         // 如果有玩家管理器，显示各玩家的行军路线数量
         if (this._playerManager) {
             const players = this._playerManager.getPlayers();
             
             // 获取人类玩家和AI玩家
-            const humanPlayers = players.filter(player => !player.isAI && !player.defeated);
-            const aiPlayers = players.filter(player => player.isAI && !player.defeated);
+            const humanPlayer = players.find(p => !p.isAI && !p.defeated);
+            const aiPlayers = players.filter(p => p.isAI && !p.defeated);
             
-            // 显示人类玩家的行军路线数量
-            humanPlayers.forEach(player => {
-                // 获取最新的行军路线数量（当前队列中的）
-                const count = this._troopManager!.getPlayerActivePathCount(player.id);
-                const statusText = `玩家${player.name}: ${count}条行军路线`;
-                const statusColor = new Color(50, 150, 255, 255); // 蓝色
+            // 更新面板内容
+            this.marchingStatusPanel.removeAllChildren();
+            
+            // 1. 显示人类玩家信息
+            if (humanPlayer) {
+                // 获取玩家颜色
+                const playerColor = humanPlayer.color;
                 
-                const item = this._createMarchingStatusItem(statusText, statusColor);
-                this.marchingStatusPanel.addChild(item);
-            });
-            
-            // 显示AI玩家的行军路线数量
-            aiPlayers.forEach(player => {
-                // 获取最新的行军路线数量（当前队列中的）
-                const count = this._troopManager!.getPlayerActivePathCount(player.id);
-                const statusText = `AI(${player.name}): ${count}条行军路线`;
-                const statusColor = new Color(255, 100, 100, 255); // 红色
+                // 创建标题项
+                const titleItem = this._createMarchingStatusItem(`你的行军路线 (${humanPlayer.activePathCount}/${humanPlayer.maxPathCount})`, playerColor);
+                this.marchingStatusPanel.addChild(titleItem);
                 
-                const item = this._createMarchingStatusItem(statusText, statusColor);
-                this.marchingStatusPanel.addChild(item);
-            });
-            
-            // 添加分隔行
-            if ((humanPlayers.length > 0 || aiPlayers.length > 0) && marchingPaths.length > 0) {
-                const item = this._createMarchingStatusItem("───────────", new Color(150, 150, 150, 255));
-                this.marchingStatusPanel.addChild(item);
-            }
-        }
-        
-        // 如果没有行军路径，显示"无行军路线"
-        if (marchingPaths.length === 0) {
-            const item = this._createMarchingStatusItem("无行军路线", new Color(200, 200, 200, 255));
-            this.marchingStatusPanel.addChild(item);
-            return;
-        }
-        
-        // 显示所有行军路径状态
-        marchingPaths.forEach((path, index) => {
-            let statusText: string;
-            let statusColor: Color;
-            
-            // 获取路径所属玩家名称
-            let playerName = `玩家${path.playerId}`;
-            if (this._playerManager) {
-                const player = this._playerManager.getPlayerById(path.playerId);
-                if (player) {
-                    playerName = player.name;
+                // 显示队列中的路径详情
+                const playerPaths = marchingPathsMap.get(humanPlayer.id) || [];
+                
+                if (playerPaths.length > 0) {
+                    for (let i = 0; i < playerPaths.length; i++) {
+                        const path = playerPaths[i];
+                        
+                        // 计算当前步骤和总步数
+                        const currentStep = path.currentStep + 1;
+                        const totalSteps = path.pathTiles.length;
+                        
+                        // 获取起点和终点
+                        const startPoint = path.pathTiles[0];
+                        const endPoint = path.pathTiles[path.pathTiles.length - 1];
+                        
+                        // 创建路径项
+                        const pathInfo = `路线${i+1}: [${startPoint.x},${startPoint.y}] → [${endPoint.x},${endPoint.y}] (${currentStep}/${totalSteps})`;
+                        const pathItem = this._createMarchingStatusItem(pathInfo, playerColor);
+                        
+                        // 将路径项添加到面板
+                        this.marchingStatusPanel.addChild(pathItem);
+                    }
+                } else {
+                    // 如果没有行军路线，显示提示
+                    const emptyItem = this._createMarchingStatusItem("  没有行军路线", playerColor);
+                    this.marchingStatusPanel.addChild(emptyItem);
                 }
             }
             
-            // 第一条显示为"执行中"，其余显示为"排队中"
-            if (index === 0) {
-                const currentStep = path.currentStep + 1; // +1是为了显示为从1开始而不是0
-                const totalSteps = path.pathTiles.length; // 完整路径的总步数
-                statusText = `${playerName} 执行中: (${currentStep}/${totalSteps})`;
-                statusColor = new Color(50, 200, 50, 255); // 绿色
-            } else {
-                const totalSteps = path.pathTiles.length;
-                statusText = `${playerName} 排队中: (${index}/${marchingPaths.length})`;
-                statusColor = new Color(200, 150, 50, 255); // 橙色
+            // 2. 显示AI玩家信息
+            if (aiPlayers.length > 0) {
+                // 添加分隔行
+                const separatorItem = this._createMarchingStatusItem("AI行军路线", new Color(200, 200, 200, 255));
+                this.marchingStatusPanel.addChild(separatorItem);
+                
+                // 遍历每个AI玩家
+                for (const aiPlayer of aiPlayers) {
+                    // 获取玩家颜色
+                    const playerColor = aiPlayer.color;
+                    
+                    // 创建AI玩家标题项
+                    const aiTitleItem = this._createMarchingStatusItem(`AI ${aiPlayer.id} (${aiPlayer.activePathCount}/${aiPlayer.maxPathCount})`, playerColor);
+                    this.marchingStatusPanel.addChild(aiTitleItem);
+                    
+                    // 显示AI的行军路线数量
+                    const aiPaths = marchingPathsMap.get(aiPlayer.id) || [];
+                    
+                    if (aiPaths.length > 0) {
+                        // 仅显示AI路线数量，不显示详情
+                        const aiInfoItem = this._createMarchingStatusItem(`  共${aiPaths.length}条行军路线`, playerColor);
+                        this.marchingStatusPanel.addChild(aiInfoItem);
+                    } else {
+                        // 如果没有行军路线，显示提示
+                        const emptyItem = this._createMarchingStatusItem("  没有行军路线", playerColor);
+                        this.marchingStatusPanel.addChild(emptyItem);
+                    }
+                }
             }
-            
-            const item = this._createMarchingStatusItem(statusText, statusColor);
-            this.marchingStatusPanel.addChild(item);
-        });
+        } else {
+            // 无玩家管理器时显示简单信息
+            this.marchingStatusPanel.removeAllChildren();
+            const infoItem = this._createMarchingStatusItem("无法获取行军信息", new Color(255, 0, 0, 255));
+            this.marchingStatusPanel.addChild(infoItem);
+        }
     }
     
     /**
@@ -1264,7 +1352,7 @@ export class LocalGameController extends Component {
     /**
      * 结束回合按钮点击处理
      */
-    private _onEndTurnButtonClicked() {
+    private _onSpeedUpTurnButtonClicked() {
         if (!this._gameStarted || this._gameOver || !this._timeManager) return;
         
         // 在实时模式下，此按钮可用于切换游戏速度
@@ -1273,7 +1361,7 @@ export class LocalGameController extends Component {
         this._timeManager.setGameSpeed(newSpeed);
         
         // 更新按钮显示
-        this.endTurnButton.getComponentInChildren(Label)!.string = `速度 x${newSpeed}`;
+        this.SpeedButton.getComponentInChildren(Label)!.string = `速度 x${newSpeed}`;
     }
     
     /**
@@ -1406,6 +1494,42 @@ export class LocalGameController extends Component {
      * 游戏主循环更新
      */
     update(dt: number) {
+        /*
+        在Cocos Creator中，`update`函数的参数`dt`代表"delta time"，即自上一次更新以来经过的时间（通常以秒为单位）。
+        具体来说，`dt`的作用如下：
+
+            ### `dt`的作用：
+
+            1. **时间间隔**：
+            - `dt`表示从上一帧到当前帧的时间间隔。这使得游戏逻辑可以根据实际时间进行更新，而不是依赖于固定的帧率。
+
+            2. **平滑运动**：
+            - 使用`dt`可以实现平滑的运动和动画。
+            例如，如果你想让一个对象以每秒`speed`的速度移动，你可以使用以下公式来计算移动的距离：
+            \[
+            \text{distance} = \text{speed} \times dt
+            \]
+            这样，无论帧率如何变化，物体的移动速度都将保持一致。
+
+            3. **游戏逻辑更新**：
+            - 在游戏中，许多逻辑（如物理模拟、动画、计时器等）都依赖于时间。
+            使用`dt`可以确保这些逻辑在不同的帧率下都能正常工作。
+
+            ### 示例：
+            假设你有一个物体需要以每秒5个单位的速度移动，你可以在`update`函数中这样实现：
+
+            ```typescript
+            update(dt: number) {
+                const speed = 5; // 每秒5个单位
+                this.node.position.x += speed * dt; // 根据dt更新位置
+            }
+            ```
+
+            ### 总结：
+            `dt`是一个非常重要的参数，它使得游戏的更新逻辑能够根据实际时间进行调整，从而实现平滑的动画和一致的游戏体验。
+            通过使用`dt`，开发者可以确保游戏在不同的设备和帧率下都能保持相同的行为。
+
+        */
         if (!this._gameStarted || this._gameOver) {
             return;
         }
@@ -1416,28 +1540,13 @@ export class LocalGameController extends Component {
             return;
         }
         
-        // 定期检查游戏结束条件（每秒一次）
-        const gameTime = Math.floor(this._timeManager.getGameTime());
+        const gameTime = this._timeManager.getGameTime();
+
+        // 定期检查游戏结束条件
         if (gameTime % 3 === 0) {
             this._checkGameEndCondition();
         }
-        
-        // 调试信息
-        if (gameTime % 10 === 0) {
-            //console.log(`=== 游戏状态信息 ===`);
-            //console.log(`游戏时间: ${this._timeManager.getGameTime().toFixed(1)}秒`);
-            //console.log(`游戏速度: x${this._timeManager.getGameSpeed()}`);
-            
-            // 玩家状态
-            const players = this._playerManager.getPlayers();
-            //console.log(`玩家数量: ${players.length}`);
-            //players.forEach(player => {
-            //    const status = player.defeated ? "已击败" : "活跃中";
-            //    const aiInfo = player.isAI ? `(AI 难度:${player.aiLevel})` : "(人类)";
-            //    console.log(`- 玩家${player.id} ${player.name} ${aiInfo}: ${status}, 地块数:${player.ownedTiles.length}`);
-            //});
-        }
-        
+
         // 调用时间管理器更新 - 这会触发AI逻辑和部队移动
         this._timeManager.update(dt);
         
@@ -1486,12 +1595,12 @@ export class LocalGameController extends Component {
         }
         
         // 输出调试信息（每3秒一次）
-        console.log(`【大本营】周期性检查: 所有AI被击败=${allAIDefeated}, 人类被击败=${humanDefeated}`);
+        // console.log(`【大本营】周期性检查: 所有AI被击败=${allAIDefeated}, 人类被击败=${humanDefeated}`);
         
         // 检查胜利条件
         if (allAIDefeated && !humanDefeated) {
             // 人类玩家胜利
-            console.log(`【大本营】检测到胜利条件：所有AI大本营被占领，人类玩家胜利`);
+            // console.log(`【大本营】检测到胜利条件：所有AI大本营被占领，人类玩家胜利`);
             this._gameOver = true;
             this._timeManager?.pauseGame();
             
@@ -1503,7 +1612,7 @@ export class LocalGameController extends Component {
         } 
         else if (humanDefeated) {
             // 人类玩家失败
-            console.log(`【大本营】检测到失败条件：人类玩家大本营被占领，游戏失败`);
+            // console.log(`【大本营】检测到失败条件：人类玩家大本营被占领，游戏失败`);
             this._gameOver = true;
             this._timeManager?.pauseGame();
             
@@ -1530,6 +1639,7 @@ export class LocalGameController extends Component {
         // 初始状态显示"无行军路线"
         const item = this._createMarchingStatusItem("无行军路线", new Color(200, 200, 200, 255));
         this.marchingStatusPanel.addChild(item);
+        // 将写有"无行军路线"的Label预制体实例化，并添加到行军状态面板上
         
         // 设置面板样式
         const layout = this.marchingStatusPanel.getComponent(Layout) || this.marchingStatusPanel.addComponent(Layout);
@@ -1539,7 +1649,34 @@ export class LocalGameController extends Component {
         layout.paddingBottom = 10;
         layout.paddingLeft = 10;
         layout.paddingRight = 10;
-        layout.spacingY = 5;
+        layout.spacingY = 1;
+        /*
+        逐部分解释：
+            const layout = this.marchingStatusPanel.getComponent(Layout) || this.marchingStatusPanel.addComponent(Layout);：
+            这行代码尝试从marchingStatusPanel中获取名为Layout的组件实例。
+            如果marchingStatusPanel上已经存在Layout组件，则返回该实例；
+            如果不存在，则通过addComponent(Layout)方法添加一个新的Layout组件。
+            这样，layout变量将始终引用一个有效的Layout组件实例。
+
+            layout.type = Layout.Type.VERTICAL;：
+            这行代码设置布局的类型为垂直（VERTICAL），这意味着面板中的子项将按垂直方向排列。
+            这种布局方式适合于需要在竖直方向上显示多个状态项的场景。
+
+            layout.resizeMode = Layout.ResizeMode.CONTAINER;：
+            这行代码设置布局的调整模式为CONTAINER，表示布局将根据容器的大小来调整子项的排列。
+            这种模式通常用于确保子项在容器内的适当显示。
+
+            layout.paddingTop = 10;、layout.paddingBottom = 10;、layout.paddingLeft = 10;、layout.paddingRight = 10;：
+            这些行代码分别设置了面板的上下左右填充（padding）为10个像素。
+            填充用于在面板的边缘和子项之间留出空间，使得界面看起来更加美观和整洁。
+
+            layout.spacingY = 5;：
+            这行代码设置子项之间的垂直间距（spacingY）为1个像素。
+            这确保了面板中每个状态项之间有一定的间隔，使得信息更加易于阅读。
+
+            总结：
+            这段代码的主要目的是为行军状态面板设置布局属性，以确保面板中的子项能够以垂直方向排列，并具有适当的填充和间距。这种布局设置有助于提升用户界面的可读性和美观性，使玩家能够清晰地看到行军状态信息。通过动态添加或获取布局组件，确保了面板的灵活性和可扩展性。
+        */
         
         //console.log("LocalGameController: 行军状态面板初始化完成");
     }
@@ -1562,17 +1699,26 @@ export class LocalGameController extends Component {
         const players = this._playerManager.getPlayers();
         players.forEach(player => {
             player.ownedTiles = [];
+            // ownedTiles是该玩家拥有的土地坐标列表
             
             // 重置行军路线计数
             player.activePathCount = 0;
+            // activePathCount是该玩家当前活跃的行军路线数量
         });
         
         // 遍历所有地块，将地块添加到对应玩家的列表中
+        // 每次都要清空其实很慢，后面有机会得改改这个算法
+        // 怪不得越跑越慢
         for (let y = 0; y < mapSize.height; y++) {
             for (let x = 0; x < mapSize.width; x++) {
                 const tile = this._mapManager.getTile(x, y);
                 if (tile && tile.ownerId !== -1) {
                     const player = this._playerManager.getPlayerById(tile.ownerId);
+                    /*
+                    _playerManager.getPlayerById() 返回的是玩家对象的直接引用。
+                    当调用 player.addOwnedTile() 时，修改的是内存中的同一个玩家实例，
+                    因此数据会实时更新，无需担心引用不一致。
+                    */
                     if (player) {
                         player.addOwnedTile(new Vec2(x, y));
                         //console.log(`将地块 [${x},${y}] 添加到玩家${player.id}的拥有列表，兵力=${tile.troops}`);
@@ -1584,22 +1730,12 @@ export class LocalGameController extends Component {
         // 如果有部队管理器，重新计算每个玩家当前队列中的行军路线数量
         if (this._troopManager) {
             // 获取当前行军路径队列
-            const marchingPaths = this._troopManager.getMarchingPaths();
-            
-            // 根据当前队列重新计算每个玩家的行军路线数量
-            const pathCountByPlayer: {[playerId: number]: number} = {};
-            
-            // 对队列中的每条路径进行统计
-            marchingPaths.forEach(path => {
-                if (!pathCountByPlayer[path.playerId]) {
-                    pathCountByPlayer[path.playerId] = 0;
-                }
-                pathCountByPlayer[path.playerId]++;
-            });
+            const marchingPathsMap = this._troopManager.getMarchingPaths();
             
             // 更新每个玩家的行军路线计数
             players.forEach(player => {
-                player.activePathCount = pathCountByPlayer[player.id] || 0;
+                const playerPaths = marchingPathsMap.get(player.id) || [];
+                player.activePathCount = playerPaths.length;
                 //console.log(`玩家${player.id}的当前队列中行军路线数量: ${player.activePathCount}`);
             });
         }
@@ -1618,6 +1754,7 @@ export class LocalGameController extends Component {
      * @returns 创建的状态项节点
      */
     private _createPlayerStatItem(player: any): Node {
+        // 创建玩家状态项
         // 实例化预制体
         const item = instantiate(this.playerStatItemPrefab);
         
@@ -1633,6 +1770,7 @@ export class LocalGameController extends Component {
                 const mapSize = this._mapManager.getMapSize();
                 
                 // 遍历所有地块
+                // 这里又遍历一遍，我勒个豆，咋回事这AI写的可真是
                 for (let y = 0; y < mapSize.height; y++) {
                     for (let x = 0; x < mapSize.width; x++) {
                         const tile = this._mapManager.getTile(x, y);
@@ -1676,7 +1814,28 @@ export class LocalGameController extends Component {
         layout.paddingBottom = 10;
         layout.paddingLeft = 10;
         layout.paddingRight = 10;
-        layout.spacingY = 5;
+        layout.spacingY = 1;
+        /*
+        逐部分解释：
+            layout.type = Layout.Type.VERTICAL;：
+            这行代码设置布局的类型为垂直（VERTICAL），这意味着面板中的子项将按垂直方向排列。
+            这种布局方式适合于需要在竖直方向上显示多个状态项的场景。
+
+            layout.resizeMode = Layout.ResizeMode.CONTAINER;：
+            这行代码设置布局的调整模式为CONTAINER，表示布局将根据容器的大小来调整子项的排列。
+            这种模式通常用于确保子项在容器内的适当显示。
+
+            layout.paddingTop = 10;、layout.paddingBottom = 10;、layout.paddingLeft = 10;、layout.paddingRight = 10;：
+            这些行代码分别设置了面板的上下左右填充（padding）为10个像素。
+            填充用于在面板的边缘和子项之间留出空间，使得界面看起来更加美观和整洁。
+
+            layout.spacingY = 1;：
+            这行代码设置子项之间的垂直间距（spacingY）为1个像素。
+            这确保了面板中每个状态项之间有一定的间隔，使得信息更加易于阅读。
+
+            总结：
+            这段代码的主要目的是为玩家状态面板设置布局属性，以确保面板中的子项能够以垂直方向排列，并具有适当的填充和间距。这种布局设置有助于提升用户界面的可读性和美观性，使玩家能够清晰地看到玩家状态信息。通过动态添加或获取布局组件，确保了面板的灵活性和可扩展性。
+        */
         
         // 添加标题
         const titleItem = instantiate(this.playerStatItemPrefab);
@@ -1687,6 +1846,33 @@ export class LocalGameController extends Component {
             titleLabel.fontSize += 2; // 标题稍大一些
             this.playerStatsPanel.addChild(titleItem);
         }
+        /*
+        逐部分解释：
+            const titleItem = instantiate(this.playerStatItemPrefab);：
+            这行代码通过instantiate方法实例化一个预制体（playerStatItemPrefab），创建一个新的节点（titleItem）。
+            这个预制体通常包含一个Label组件，用于显示文本。
+            
+            const titleLabel = titleItem.getComponent(Label) || titleItem.getComponentInChildren(Label);：
+            这行代码尝试从titleItem中获取名为Label的组件实例。
+            如果titleItem上存在Label组件，则返回该实例；如果没有，则尝试获取其子节点中的Label组件。
+            
+            if (titleLabel) { ... }：
+            这个条件语句检查是否成功获取到Label组件。如果成功，则执行后续的代码。
+            
+            titleLabel.string = "玩家状态";：
+            这行代码设置Label组件的文本内容为"玩家状态"，用于作为标题显示。
+            
+            titleLabel.color = new Color(255, 255, 255, 255);：
+            这行代码将Label的颜色设置为白色（RGBA值为255, 255, 255, 255），确保标题在面板上清晰可见。
+            
+            titleLabel.fontSize += 2;：
+            这行代码将标题的字体大小增加2个单位，使其稍微显得更大，以便突出显示。
+            
+            this.playerStatsPanel.addChild(titleItem);：
+            这行代码将创建的标题项（titleItem）添加到玩家状态面板（playerStatsPanel）中，使其在UI上可见。
+
+            哦对，playerStatsPanel和playerStatItemPrefab不是一个东西
+        */
         
         // 初始状态更新
         this._updatePlayerStats();
@@ -1701,6 +1887,7 @@ export class LocalGameController extends Component {
         if (!this.playerStatsPanel || !this.playerStatItemPrefab || !this._playerManager || !this._mapManager) {
             return;
         }
+        // 运行到这里就是在更新玩家状态了
         
         // 先更新玩家拥有地块列表，确保数据准确
         this._updatePlayerOwnedTiles();
@@ -1719,6 +1906,29 @@ export class LocalGameController extends Component {
             if (!player.defeated) { // 只显示未被击败的玩家
                 const item = this._createPlayerStatItem(player);
                 this.playerStatsPanel.addChild(item);
+            }
+        });
+    }
+
+    private _syncAllPlayerPathCounts() {
+        if (!this._playerManager || !this._troopManager) {
+            return;
+        }
+        
+        // 获取当前行军路径队列
+        const marchingPathsMap = this._troopManager.getMarchingPaths();
+        
+        // 获取所有玩家
+        const players = this._playerManager.getPlayers();
+        
+        // 更新每个玩家的行军路线数量
+        players.forEach(player => {
+            const playerPaths = marchingPathsMap.get(player.id) || [];
+            const count = playerPaths.length;
+            
+            if (player.activePathCount !== count) {
+                ////console.log(`LocalGameController: 同步玩家${player.id}的行军路线计数，从${player.activePathCount}更新为${count}`);
+                player.activePathCount = count;
             }
         });
     }

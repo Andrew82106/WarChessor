@@ -29,8 +29,8 @@ export class TroopManager extends Component {
     private _mapManager: MapManager | null = null;
     private _playerManager: PlayerManager | null = null;
     
-    // 行军队列
-    private _marchingPaths: MarchingPath[] = [];
+    // 行军队列 - 以用户ID为键的Map，每个用户拥有独立的队列
+    private _marchingPaths: Map<number, MarchingPath[]> = new Map<number, MarchingPath[]>();
     
     // 游戏规则
     private _gameRules: any = null;
@@ -59,7 +59,9 @@ export class TroopManager extends Component {
      * @returns 是否成功创建行军路径
      */
     createMarchingPath(playerId: number, sourceTile: Vec2, targetTiles: Vec2[], troops: number): boolean {
-        ////console.log(`TroopManager: createMarchingPath调用 - 玩家ID=${playerId}, 起点=[${sourceTile.x},${sourceTile.y}], 目标点数=${targetTiles.length}, 兵力=${troops}`);
+        // 函数中不涉及最短路径算法，只负责创建行军路径
+        
+        //console.log(`TroopManager: createMarchingPath调用 - 玩家ID=${playerId}, 起点=[${sourceTile.x},${sourceTile.y}], 目标点数=${targetTiles.length}, 兵力=${troops}`);
         
         // 检查地图管理器是否可用
         if (!this._mapManager) {
@@ -104,7 +106,7 @@ export class TroopManager extends Component {
         
         // 检查目标路径是否有效
         if (!targetTiles || targetTiles.length === 0) {
-            console.error("TroopManager: 目标路径为空，无法创建行军路径");
+            console.error("TroopManager: 目标路径为空，无法创建行军路径，targetTiles=" + targetTiles + ", sourceTile=" + sourceTile);
             return false;
         }
         
@@ -127,18 +129,18 @@ export class TroopManager extends Component {
         };
         
         // 从源格子减少兵力
-        sourceTileObj.troops -= troops;
-        ////console.log(`TroopManager: 从起始格子 [${sourceTile.x},${sourceTile.y}] 减少 ${troops} 兵力, 剩余: ${sourceTileObj.troops}`);
+        //sourceTileObj.troops -= troops;
+        //console.log(`TroopManager: 从起始格子 [${sourceTile.x},${sourceTile.y}] 减少 ${troops} 兵力, 剩余: ${sourceTileObj.troops}`);
         
         // 添加到行军路径队列
-        this._marchingPaths.push(marchingPath);
+        if (!this._marchingPaths.has(playerId)) {
+            this._marchingPaths.set(playerId, []);
+        }
+        this._marchingPaths.get(playerId)?.push(marchingPath);
         
         // 增加玩家的行军路线计数
         player.activePathCount++;
-        ////console.log(`TroopManager: 玩家${playerId}的行军路线数增加到 ${player.activePathCount}，当前队列中${this.getPlayerActivePathCount(playerId)}条`);
-        
-        ////console.log(`TroopManager: 行军路径创建成功，当前队列长度: ${this._marchingPaths.length}`);
-        
+
         return true;
     }
     
@@ -147,147 +149,153 @@ export class TroopManager extends Component {
      * 每个时间间隔调用一次，推进所有行军路径的进度
      */
     processMarchingQueues(): void {
-        // 如果没有行军路径，不输出大量日志
-        if (this._marchingPaths.length === 0) {
+        // 如果没有行军路径，直接返回
+        if (this._marchingPaths.size === 0) {
             return;
         }
         
-        ////console.log(`----- TroopManager: processMarchingQueues调用, 当前队列长度: ${this._marchingPaths.length} -----`);
-        ////console.log(`TroopManager: 当前行军路径队列: ${JSON.stringify(this._marchingPaths)}`);
+        ////console.log(`----- TroopManager: processMarchingQueues调用, 当前队列个数: ${this._marchingPaths.size} -----`);
+        
         if (!this._mapManager) {
             console.error(`TroopManager: 地图管理器未初始化，无法处理行军队列`);
             return;
         }
         
-        // 获取当前行军路径（队列中的第一条）
-        const currentPath = this._marchingPaths[0];
-        ////console.log(`TroopManager: 处理行军路径 - 玩家ID=${currentPath.playerId}, 当前步骤=${currentPath.currentStep}/${currentPath.pathTiles.length-1}, 兵力=${currentPath.troops}`);
-        
-        // 检查路径是否完整
-        if (!currentPath.pathTiles || currentPath.pathTiles.length <= 1) {
-            console.error("TroopManager: 行军路径不完整或没有足够的点，移除此路径");
+        // 遍历每个玩家的行军路径队列，并行处理
+        this._marchingPaths.forEach((paths, playerId) => {
+            if (paths.length === 0) {
+                return; // 跳过空队列
+            }
             
-            // 当移除路径时，减少玩家的行军路线计数
-            if (this._playerManager) {
-                const player = this._playerManager.getPlayerById(currentPath.playerId);
-                if (player) {
-                    player.activePathCount = Math.max(0, player.activePathCount - 1);
-                    ////console.log(`TroopManager: 玩家${currentPath.playerId}的行军路线数减少到 ${player.activePathCount}`);
+            // 获取当前玩家的第一条路径
+            const currentPath = paths[0];
+            ////console.log(`TroopManager: 处理玩家${playerId}的行军路径 - 当前步骤=${currentPath.currentStep}/${currentPath.pathTiles.length-1}, 兵力=${currentPath.troops}`);
+            
+            // 检查路径是否完整
+            if (!currentPath.pathTiles || currentPath.pathTiles.length <= 1) {
+                console.error(`TroopManager: 玩家${playerId}的行军路径不完整或没有足够的点，移除此路径`);
+                
+                // 当移除路径时，减少玩家的行军路线计数
+                if (this._playerManager) {
+                    const player = this._playerManager.getPlayerById(playerId);
+                    if (player) {
+                        player.activePathCount = Math.max(0, player.activePathCount - 1);
+                        ////console.log(`TroopManager: 玩家${playerId}的行军路线数减少到 ${player.activePathCount}`);
+                    }
                 }
+                
+                paths.shift(); // 移除当前路径
+                return;
             }
             
-            this._marchingPaths.shift();
-            return;
-        }
-        
-        // 获取当前步骤的from节点（当前位置）
-        const fromPos = currentPath.pathTiles[currentPath.currentStep];
-        ////console.log(`TroopManager: 当前位置是 [${fromPos.x},${fromPos.y}]`);
-        
-        // 获取当前步骤的to节点（下一个目标位置）
-        const nextStep = currentPath.currentStep + 1;
-        
-        // 如果已经到达最后一步，完成行军
-        if (nextStep >= currentPath.pathTiles.length) {
-            ////console.log(`TroopManager: 行军路径已完成，从队列中移除, 总步数: ${currentPath.pathTiles.length-1}`);
+            // 获取当前步骤的from节点（当前位置）
+            const fromPos = currentPath.pathTiles[currentPath.currentStep];
+            ////console.log(`TroopManager: 玩家${playerId}的当前位置是 [${fromPos.x},${fromPos.y}]`);
             
-            // 当移除路径时，减少玩家的行军路线计数
-            if (this._playerManager) {
-                const player = this._playerManager.getPlayerById(currentPath.playerId);
-                if (player) {
-                    player.activePathCount = Math.max(0, player.activePathCount - 1);
-                    ////console.log(`TroopManager: 玩家${currentPath.playerId}的行军路径已完成，行军路线数减少到 ${player.activePathCount}`);
+            // 获取当前步骤的to节点（下一个目标位置）
+            const nextStep = currentPath.currentStep + 1;
+            
+            // 如果已经到达最后一步，完成行军
+            if (nextStep >= currentPath.pathTiles.length) {
+                ////console.log(`TroopManager: 玩家${playerId}的行军路径已完成，从队列中移除, 总步数: ${currentPath.pathTiles.length-1}`);
+                
+                // 当移除路径时，减少玩家的行军路线计数
+                if (this._playerManager) {
+                    const player = this._playerManager.getPlayerById(playerId);
+                    if (player) {
+                        player.activePathCount = Math.max(0, player.activePathCount - 1);
+                        ////console.log(`TroopManager: 玩家${playerId}的行军路径已完成，行军路线数减少到 ${player.activePathCount}`);
+                    }
                 }
-            }
-            
-            this._marchingPaths.shift();
-            ////console.log(`TroopManager: 行军路径队列长度: ${this._marchingPaths.length}`);
-            
-            // 触发行军状态更新事件
-            this.node.emit('marching-status-updated');
-            // 也向场景发送事件，确保LocalGameController能够接收到
-            const scene = director.getScene();
-            if (scene) {
-                scene.emit('marching-status-updated');
-            }
-            
-            return;
-        }
-        
-        // 获取下一步位置
-        const toPos = currentPath.pathTiles[nextStep];
-        ////console.log(`TroopManager: 下一个目标点是 [${toPos.x},${toPos.y}]`);
-        
-        // 计算两点间的曼哈顿距离
-        const distance = Math.abs(fromPos.x - toPos.x) + Math.abs(fromPos.y - toPos.y);
-        ////console.log(`TroopManager: 当前步骤的曼哈顿距离为 ${distance}`);
-        
-        // 获取from和to节点的格子对象
-        const fromTile = this._mapManager.getTile(fromPos.x, fromPos.y);
-        const toTile = this._mapManager.getTile(toPos.x, toPos.y);
-        
-        if (!fromTile || !toTile) {
-            console.error(`TroopManager: 格子不存在，跳过此步骤, fromTile=${!!fromTile}, toTile=${!!toTile}`);
-            currentPath.currentStep++; // 增加步骤
-            return;
-        }
-        if (fromTile.ownerId !== currentPath.playerId) {
-            console.error(`TroopManager: 起点格子不属于当前玩家，中止该路线, fromTile=${!!fromTile}, toTile=${!!toTile}`);
-            
-            // 当移除路径时，减少玩家的行军路线计数
-            if (this._playerManager) {
-                const player = this._playerManager.getPlayerById(currentPath.playerId);
-                if (player) {
-                    player.activePathCount = Math.max(0, player.activePathCount - 1);
-                    ////console.log(`TroopManager: 玩家${currentPath.playerId}的行军路线因起点问题被取消，行军路线数减少到 ${player.activePathCount}`);
+                
+                paths.shift(); // 移除当前路径
+                
+                // 触发行军状态更新事件
+                this.node.emit('marching-status-updated');
+                // 也向场景发送事件，确保LocalGameController能够接收到
+                const scene = director.getScene();
+                if (scene) {
+                    scene.emit('marching-status-updated');
                 }
+                
+                return;
             }
             
-            this._marchingPaths.shift(); // 移除当前路径
-            ////console.log(`TroopManager: 行军路径队列长度: ${this._marchingPaths.length}`)
-            return;
-        }
-        
-        // 显示当前两个格子的状态
-        ////console.log(`TroopManager: 处理行军：从 [${fromPos.x},${fromPos.y}] 到 [${toPos.x},${toPos.y}]`);
-        ////console.log(`起点格子状态: 所有者=${fromTile.ownerId}, 兵力=${fromTile.troops}`);
-        ////console.log(`终点格子状态: 所有者=${toTile.ownerId}, 兵力=${toTile.troops}`);
+            // 获取下一步位置
+            const toPos = currentPath.pathTiles[nextStep];
+            ////console.log(`TroopManager: 玩家${playerId}的下一个目标点是 [${toPos.x},${toPos.y}]`);
+            
+            // 计算两点间的曼哈顿距离
+            const distance = Math.abs(fromPos.x - toPos.x) + Math.abs(fromPos.y - toPos.y);
+            ////console.log(`TroopManager: 玩家${playerId}的当前步骤的曼哈顿距离为 ${distance}`);
+            
+            // 获取from和to节点的格子对象
+            const fromTile = this._mapManager.getTile(fromPos.x, fromPos.y);
+            const toTile = this._mapManager.getTile(toPos.x, toPos.y);
+            
+            if (!fromTile || !toTile) {
+                console.error(`TroopManager: 玩家${playerId}的格子不存在，跳过此步骤, fromTile=${!!fromTile}, toTile=${!!toTile}`);
+                currentPath.currentStep++; // 增加步骤
+                return;
+            }
+            
+            if (fromTile.ownerId !== playerId) {
+                console.error(`TroopManager: 玩家${playerId}的起点格子不属于当前玩家，中止该路线`);
+                
+                // 当移除路径时，减少玩家的行军路线计数
+                if (this._playerManager) {
+                    const player = this._playerManager.getPlayerById(playerId);
+                    if (player) {
+                        player.activePathCount = Math.max(0, player.activePathCount - 1);
+                        ////console.log(`TroopManager: 玩家${playerId}的行军路线因起点问题被取消，行军路线数减少到 ${player.activePathCount}`);
+                    }
+                }
+                
+                paths.shift(); // 移除当前路径
+                return;
+            }
+            
+            // 显示当前两个格子的状态
+            ////console.log(`TroopManager: 处理玩家${playerId}的行军：从 [${fromPos.x},${fromPos.y}] 到 [${toPos.x},${toPos.y}]`);
+            ////console.log(`起点格子状态: 所有者=${fromTile.ownerId}, 兵力=${fromTile.troops}`);
+            ////console.log(`终点格子状态: 所有者=${toTile.ownerId}, 兵力=${toTile.troops}`);
 
-        const availableTroops = Math.max(0, fromTile.troops - 1);
-        
-        if (availableTroops > 0) {
-            // 移动到目标格子
-            // 检查目标格子所有权
-            if (toTile.ownerId === currentPath.playerId) {
-                // 如果目标格子是己方的，增加兵力
-                ////console.log(`TroopManager: 目标是己方格子，增加兵力 ${availableTroops}`);
-                toTile.troops += availableTroops;
-                ////console.log(`TroopManager: 目标格子兵力更新为 ${toTile.troops}`);
-            } else if (toTile.ownerId === -1 || toTile.troops === 0) {
-                // 如果目标格子是无主的或没有兵力，占领它
-                ////console.log(`TroopManager: 目标是无主格子或无兵力格子，占领它，设置兵力 ${availableTroops}`);
-                toTile.ownerId = currentPath.playerId;
-                toTile.troops = availableTroops;
-                ////console.log(`TroopManager: 目标格子已被占领，所有者更新为 ${toTile.ownerId}, 兵力为 ${toTile.troops}`);
-            } else {
-                // 如果目标格子是敌方的，计算战斗结果
-                ////console.log(`TroopManager: 目标是敌方格子，发生战斗, 攻击方兵力=${availableTroops}, 防守方兵力=${toTile.troops}`);
-                this.resolveCombat(currentPath.playerId, toPos.x, toPos.y, availableTroops);
+            const availableTroops = Math.max(0, fromTile.troops - 1);
+            
+            if (availableTroops > 0) {
+                // 移动到目标格子
+                // 检查目标格子所有权
+                if (toTile.ownerId === playerId) {
+                    // 如果目标格子是己方的，增加兵力
+                    ////console.log(`TroopManager: 玩家${playerId}的目标是己方格子，增加兵力 ${availableTroops}`);
+                    toTile.troops += availableTroops;
+                    ////console.log(`TroopManager: 目标格子兵力更新为 ${toTile.troops}`);
+                } else if (toTile.ownerId === -1 || toTile.troops === 0) {
+                    // 如果目标格子是无主的或没有兵力，占领它
+                    ////console.log(`TroopManager: 玩家${playerId}的目标是无主格子或无兵力格子，占领它，设置兵力 ${availableTroops}`);
+                    toTile.ownerId = playerId;
+                    toTile.troops = availableTroops;
+                    ////console.log(`TroopManager: 目标格子已被占领，所有者更新为 ${toTile.ownerId}, 兵力为 ${toTile.troops}`);
+                } else {
+                    // 如果目标格子是敌方的，计算战斗结果
+                    ////console.log(`TroopManager: 玩家${playerId}的目标是敌方格子，发生战斗, 攻击方兵力=${availableTroops}, 防守方兵力=${toTile.troops}`);
+                    this.resolveCombat(playerId, toPos.x, toPos.y, availableTroops);
+                }
+                // 从源格子减少兵力
+                fromTile.troops -= availableTroops;
+                ////console.log(`TroopManager: 从玩家${playerId}的起始格子 [${fromPos.x},${fromPos.y}] 减少 ${availableTroops} 兵力, 剩余: ${fromTile.troops}`);
             }
-            // 从源格子减少兵力
-            fromTile.troops -= availableTroops;
-            ////console.log(`TroopManager: 从起始格子 [${fromPos.x},${fromPos.y}] 减少 ${availableTroops} 兵力, 剩余: ${fromTile.troops}`);
-        }
-        
-        // 前进到下一步
-        currentPath.currentStep++;
-        ////console.log(`TroopManager: 行军前进到下一步, 新的当前步骤=${currentPath.currentStep}/${currentPath.pathTiles.length-1}`);
-        
-        // 检查是否已经到达最后一步
-        if (currentPath.currentStep >= currentPath.pathTiles.length - 1) {
-            ////console.log(`TroopManager: 行军路径已完成所有步骤，从队列中移除`);
-            this._marchingPaths.shift(); // 移除当前路径
-        }
+            
+            // 前进到下一步
+            currentPath.currentStep++;
+            ////console.log(`TroopManager: 玩家${playerId}的行军前进到下一步, 新的当前步骤=${currentPath.currentStep}/${currentPath.pathTiles.length-1}`);
+            
+            // 检查是否已经到达最后一步
+            if (currentPath.currentStep >= currentPath.pathTiles.length - 1) {
+                ////console.log(`TroopManager: 玩家${playerId}的行军路径已完成所有步骤，从队列中移除`);
+                paths.shift(); // 移除当前路径
+            }
+        });
         
         ////console.log(`----- TroopManager: 行军处理完成 -----`);
     }
@@ -469,7 +477,7 @@ export class TroopManager extends Component {
                 
                 switch (terrainType) {
                     case TerrainType.BASIC_LAND:
-                        growthAmount = 1;
+                        growthAmount = this._gameRules.baseIncreaseRate;
                         break;
                     case TerrainType.POPULATION_CENTER:
                         growthAmount = this._gameRules.populationIncreaseRate;
@@ -493,12 +501,12 @@ export class TroopManager extends Component {
      * 清除指定玩家的所有行军队列
      */
     clearMarchingQueuesForPlayer(playerId: number): void {
-        // 计算要清除的路径数量
-        const pathsToRemove = this._marchingPaths.filter(path => path.playerId === playerId);
-        const removedCount = pathsToRemove.length;
+        // 获取要清除的玩家路径
+        const pathsToRemove = this._marchingPaths.get(playerId);
+        const removedCount = pathsToRemove?.length || 0;
         
         if (removedCount > 0) {
-            //////console.log(`TroopManager: 清除玩家${playerId}的行军队列，共${removedCount}条`);
+            ////console.log(`TroopManager: 清除玩家${playerId}的行军队列，共${removedCount}条`);
             
             // 重置玩家的行军路线计数
             if (this._playerManager) {
@@ -509,17 +517,17 @@ export class TroopManager extends Component {
                 }
             }
             
-            // 过滤掉该玩家的所有行军路径
-            this._marchingPaths = this._marchingPaths.filter(path => path.playerId !== playerId);
-            ////console.log(`TroopManager: 玩家${playerId}的行军队列已清除，当前队列总长度: ${this._marchingPaths.length}`);
+            // 从Map中删除该玩家的队列
+            this._marchingPaths.delete(playerId);
+            ////console.log(`TroopManager: 玩家${playerId}的行军队列已清除，当前队列数量: ${this._marchingPaths.size}`);
         }
     }
     
     /**
      * 获取所有行军路径
      */
-    getMarchingPaths(): MarchingPath[] {
-        return [...this._marchingPaths];
+    getMarchingPaths(): Map<number, MarchingPath[]> {
+        return new Map(this._marchingPaths);
     }
     
     /**
@@ -612,7 +620,7 @@ export class TroopManager extends Component {
      */
     getPlayerActivePathCount(playerId: number): number {
         // 从当前队列中计算玩家的行军路线数量
-        const actualCount = this._marchingPaths.filter(path => path.playerId === playerId).length;
+        const actualCount = this._marchingPaths.get(playerId)?.length || 0;
         
         // 如果有玩家管理器，确保玩家对象中的计数与实际队列中的数量一致
         if (this._playerManager) {
@@ -641,11 +649,8 @@ export class TroopManager extends Component {
         
         // 统计当前队列中每个玩家的路径数量
         const pathCounts: {[playerId: number]: number} = {};
-        this._marchingPaths.forEach(path => {
-            if (!pathCounts[path.playerId]) {
-                pathCounts[path.playerId] = 0;
-            }
-            pathCounts[path.playerId]++;
+        this._marchingPaths.forEach((paths, playerId) => {
+            pathCounts[playerId] = paths.length;
         });
         
         // 更新每个玩家的计数

@@ -4,6 +4,7 @@ import { PlayerManager } from './PlayerManager';
 import { TroopManager } from './TroopManager';
 import { Player } from '../models/Player';
 import { TerrainType } from '../models/MapData';
+import { LocalGameController } from '../LocalGameController';
 
 const { ccclass, property } = _decorator;
 
@@ -14,12 +15,13 @@ const { ccclass, property } = _decorator;
 @ccclass('AIManager')
 export class AIManager extends Component {
     @property
-    maxAIPathLimit: number = 5; // AI玩家在队列中的最大行军路径数量限制
+    maxAIPathLimit: number = 3; // AI玩家在队列中的最大行军路径数量限制
     
     // 引用其他管理器
     private _mapManager: MapManager | null = null;
     private _playerManager: PlayerManager | null = null;
     private _troopManager: TroopManager | null = null;
+    private _gameController: LocalGameController | null = null;
     
     /**
      * 设置管理器引用
@@ -129,50 +131,7 @@ export class AIManager extends Component {
         // 如果AI没有地块，则跳过
         if (aiPlayer.ownedTiles.length === 0) {
             console.warn(`AIManager: AI玩家 ${aiPlayer.id} 没有地块，跳过行动`);
-            
-            // 打印所有地块情况
-            //console.log("地图所有地块拥有情况:");
-            const mapSize = this._mapManager.getMapSize();
-            let tileCount = 0;
-            
-            for (let y = 0; y < mapSize.height; y++) {
-                for (let x = 0; x < mapSize.width; x++) {
-                    const tile = this._mapManager.getTile(x, y);
-                    if (tile && tile.ownerId !== -1) {
-                        tileCount++;
-                        //console.log(`地块 [${x},${y}] 归属于玩家${tile.ownerId}, 兵力=${tile.troops}`);
-                    }
-                }
-            }
-            
-            //console.log(`地图上共有 ${tileCount} 块已归属地块`);
-            
-            // 输出临时修复信息
-            //console.log("尝试修复AI没有地块的问题...");
-            const players = this._playerManager.getPlayers();
-            players.forEach(player => {
-                //console.log(`重新扫描玩家${player.id}的地块...`);
-                player.ownedTiles = [];
-                
-                for (let y = 0; y < mapSize.height; y++) {
-                    for (let x = 0; x < mapSize.width; x++) {
-                        const tile = this._mapManager!.getTile(x, y);
-                        if (tile && tile.ownerId === player.id) {
-                            player.addOwnedTile(new Vec2(x, y));
-                            //console.log(`向玩家${player.id}添加地块[${x},${y}]`);
-                        }
-                    }
-                }
-                
-                //console.log(`更新后玩家${player.id}拥有 ${player.ownedTiles.length} 块地`);
-            });
-            
-            if (aiPlayer.ownedTiles.length === 0) {
-                //console.log("修复后AI仍然没有地块，放弃执行AI行动");
-                return;
-            } else {
-                //console.log(`修复成功! AI玩家现在拥有 ${aiPlayer.ownedTiles.length} 块地，继续执行行动`);
-            }
+            return;
         }
         
         // 根据AI难度级别执行不同策略
@@ -222,8 +181,7 @@ export class AIManager extends Component {
         const currentPathCount = this._troopManager.getPlayerActivePathCount(aiPlayer.id);
         const remainingPathSlots = this.maxAIPathLimit - currentPathCount;
         
-        //console.log(`AIManager: 当前路径数${currentPathCount}，最大限制${this.maxAIPathLimit}，剩余可派遣次数${remainingPathSlots}`);
-        
+
         // 如果已经达到上限，直接返回
         if (remainingPathSlots <= 0) {
             //console.log(`AIManager: 已达到路径数量上限，跳过派遣`);
@@ -248,6 +206,7 @@ export class AIManager extends Component {
             }
             
             const tile = this._mapManager!.getTile(tilePos.x, tilePos.y);
+            // 这是起始点tile
             if (!tile) {
                 console.warn(`AIManager: 无法获取格子 [${tilePos.x},${tilePos.y}]`);
                 return;
@@ -267,8 +226,8 @@ export class AIManager extends Component {
                 return;
             }
             
-            // 计算可分配的兵力（保留一半守备）
-            const troops = Math.floor(tile.troops / 2);
+            // 计算可分配的兵力
+            const troops = Math.max(0, tile.troops - 1);
             if (troops < 1) {
                 //console.log(`AIManager: 格子 [${tilePos.x},${tilePos.y}] 可派遣兵力不足，跳过 (${troops} < 1)`);
                 return;
@@ -285,6 +244,7 @@ export class AIManager extends Component {
             
             // 随机选择一个周围的格子
             const targetTiles = this.shuffleArray([...surroundingTiles]).slice(0, 1);
+            // 这是目标点tile
             if (targetTiles.length === 0) {
                 //console.log(`AIManager: 无法选择目标格子，跳过`);
                 return;
@@ -300,13 +260,17 @@ export class AIManager extends Component {
             
             // 尝试创建行军路径
             //console.log(`AIManager: 尝试从 [${tilePos.x},${tilePos.y}] 派遣 ${troops} 兵力到 [${targetPos.x},${targetPos.y}]`);
-            
+            const sourceTile = tilePos;
+            // 调用最短路径算法计算目标点
+            const targetTilesList = this._gameController ? 
+                this._gameController.calculatePathBetweenPoints(sourceTile, targetPos) :
+                this.findPathToTarget(sourceTile, targetPos);
             try {
                 // 创建行军路径
                 const success = this._troopManager!.createMarchingPath(
                     aiPlayer.id,
-                    tilePos,
-                    targetTiles,
+                    sourceTile,
+                    targetTilesList,
                     troops
                 );
                 
@@ -376,6 +340,7 @@ export class AIManager extends Component {
             }
             
             const tile = this._mapManager!.getTile(tilePos.x, tilePos.y);
+            // 这是起始点tile
             if (!tile || tile.ownerId !== aiPlayer.id) return;
             
             // 只为拥有超过平均兵力的格子创建行军路径
@@ -394,14 +359,30 @@ export class AIManager extends Component {
             // 选择最多3个目标
             const targetTiles = prioritizedTargets.slice(0, 3);
             if (targetTiles.length === 0) return;
+            const targetPos = targetTiles[0];
+            // 这是目标点tile
+            if (targetTiles.length === 0) {
+                //console.log(`AIManager: 无法选择目标格子，跳过`);
+                return;
+            }  
+            const sourceTile = tilePos;
+            
+            // 调用最短路径算法计算目标点
+            const targetTilesList = this._gameController ? 
+                this._gameController.calculatePathBetweenPoints(sourceTile, targetPos) :
+                this.findPathToTarget(sourceTile, targetPos);
+            
+            
+            
             
             // 创建行军路径
             this._troopManager!.createMarchingPath(
                 aiPlayer.id,
                 tilePos,
-                targetTiles,
+                targetTilesList,
                 troops
             );
+            console.log(`AIManager: 成功创建行军路径! 路径内容: ${targetTilesList}`);
             
             // 增加派遣计数
             dispatchCount++;
@@ -494,12 +475,18 @@ export class AIManager extends Component {
             }
             
             if (targetTiles.length === 0) return;
+            const sourceTile = tilePos;
+            const targetPos = targetTiles[0];
+            // 调用最短路径算法计算目标点
+            const targetTilesList = this._gameController ? 
+                this._gameController.calculatePathBetweenPoints(sourceTile, targetPos) :
+                this.findPathToTarget(sourceTile, targetPos);
             
             // 创建行军路径
             this._troopManager!.createMarchingPath(
                 aiPlayer.id,
                 tilePos,
-                targetTiles,
+                targetTilesList,
                 troops
             );
             
@@ -687,7 +674,7 @@ export class AIManager extends Component {
         // 尝试获取LocalGameController组件，使用any类型避免TypeScript错误
         const localGameController = scene.getComponent('LocalGameController') as any;
         if (!localGameController) {
-            console.error("AI寻路: 无法获取LocalGameController引用");
+            console.warn("AI寻路: 无法获取LocalGameController引用，采用备用算法");
             return this.findPathToTargetFallback(source, target); // 使用备用算法
         }
         
@@ -717,65 +704,90 @@ export class AIManager extends Component {
      * 备用寻路算法（简单实现，在无法使用主算法时使用）
      */
     private findPathToTargetFallback(source: Vec2, target: Vec2): Vec2[] {
-        //console.log(`AI寻路: 使用备用算法寻找从 [${source.x},${source.y}] 到 [${target.x},${target.y}] 的路径`);
+        if (!this._mapManager) return [];
         
-        // 这里使用简单的直线路径，可以替换为A*等寻路算法
-        const path: Vec2[] = [];
+        const mapSize = this._mapManager.getMapSize();
         
-        // 计算方向向量
-        const dx = target.x - source.x;
-        const dy = target.y - source.y;
+        // 创建距离和前驱节点映射
+        const distances: Map<string, number> = new Map();
+        const previous: Map<string, Vec2 | null> = new Map();
+        const visited: Set<string> = new Set();
         
-        // 计算步数
-        const steps = Math.max(Math.abs(dx), Math.abs(dy));
+        // 优先队列（简化实现）
+        const queue: {pos: Vec2, dist: number}[] = [];
         
-        // 计算每步的增量
-        const stepX = dx === 0 ? 0 : dx > 0 ? 1 : -1;
-        const stepY = dy === 0 ? 0 : dy > 0 ? 1 : -1;
+        // 坐标转换为字符串键
+        const posToKey = (pos: Vec2): string => `${pos.x},${pos.y}`;
         
-        // 生成路径
-        let x = source.x;
-        let y = source.y;
+        // 初始化
+        const sourceKey = posToKey(source);
+        distances.set(sourceKey, 0);
+        previous.set(sourceKey, null);
+        queue.push({pos: source, dist: 0});
         
-        for (let i = 0; i < steps; i++) {
-            if (Math.abs(x - target.x) > 0) x += stepX;
-            if (Math.abs(y - target.y) > 0) y += stepY;
+        // 4个方向移动：上、右、下、左
+        const directions = [{x: 0, y: -1}, {x: 1, y: 0}, {x: 0, y: 1}, {x: -1, y: 0}];
+        
+        // Dijkstra算法主循环
+        while (queue.length > 0) {
+            // 找出距离最小的节点
+            queue.sort((a, b) => a.dist - b.dist);
+            const current = queue.shift()!;
+            const currentKey = posToKey(current.pos);
             
-            // 检查当前点是否是不可到达的地形
-            if (this._mapManager) {
-                const tile = this._mapManager.getTile(x, y);
-                if (tile && (tile.terrainType === TerrainType.MOUNTAIN || 
-                             tile.terrainType === TerrainType.LAKE)) {
-                    //console.log(`AI寻路: 路径点 [${x},${y}] 是不可到达的地形，寻找备选路径`);
-                    
-                    // 简单的避开障碍策略：尝试绕行一格
-                    const alternativePoints = [
-                        { x: x + (stepY !== 0 ? 1 : 0), y: y + (stepX !== 0 ? 1 : 0) },
-                        { x: x - (stepY !== 0 ? 1 : 0), y: y - (stepX !== 0 ? 1 : 0) }
-                    ];
-                    
-                    let foundAlternative = false;
-                    for (const point of alternativePoints) {
-                        const altTile = this._mapManager.getTile(point.x, point.y);
-                        if (altTile && !(altTile.terrainType === TerrainType.MOUNTAIN || 
-                                         altTile.terrainType === TerrainType.LAKE)) {
-                            // 找到可通行的替代点
-                            x = point.x;
-                            y = point.y;
-                            foundAlternative = true;
-                            //console.log(`AI寻路: 找到备选路径点 [${x},${y}]`);
-                            break;
-                        }
-                    }
-                    
-                    if (!foundAlternative) {
-                        //console.log(`AI寻路: 无法找到备选路径，路径终止`);
-                        break; // 无法继续寻路，结束
-                    }
-                }
+            // 如果已访问，跳过
+            if (visited.has(currentKey)) continue;
+            visited.add(currentKey);
+            
+            // 到达目标
+            if (current.pos.x === target.x && current.pos.y === target.y) {
+                break;
             }
             
-            path.push(new Vec2(x, y));
+            // 检查所有相邻节点
+            for (const dir of directions) {
+                const nextX = current.pos.x + dir.x;
+                const nextY = current.pos.y + dir.y;
+                
+                // 检查边界
+                if (nextX < 0 || nextX >= mapSize.width || nextY < 0 || nextY >= mapSize.height) {
+                    continue;
+                }
+                
+                // 检查地形可通行性
+                const tile = this._mapManager.getTile(nextX, nextY);
+                if (!tile || tile.terrainType === TerrainType.MOUNTAIN || tile.terrainType === TerrainType.LAKE) {
+                    continue;
+                }
+                
+                const nextPos = new Vec2(nextX, nextY);
+                const nextKey = posToKey(nextPos);
+                
+                // 计算新距离
+                const newDist = (distances.get(currentKey) || Infinity) + 1;
+                
+                // 如果找到更短路径
+                if (!distances.has(nextKey) || newDist < (distances.get(nextKey) || Infinity)) {
+                    distances.set(nextKey, newDist);
+                    previous.set(nextKey, current.pos);
+                    queue.push({pos: nextPos, dist: newDist});
+                }
+            }
+        }
+        
+        // 构建路径
+        const path: Vec2[] = [];
+        let current: Vec2 | null = target;
+        
+        // 如果没有找到路径
+        if (!previous.has(posToKey(target))) {
+            return [];
+        }
+        
+        // 从目标回溯到起点
+        while (current && (current.x !== source.x || current.y !== source.y)) {
+            path.unshift(current.clone());
+            current = previous.get(posToKey(current)) || null;
         }
         
         return path;
@@ -923,5 +935,9 @@ export class AIManager extends Component {
             // 简单AI派遣约50%的兵力
             return Math.floor(totalTroops / 2);
         }
+    }
+
+    setGameController(controller: LocalGameController): void {
+        this._gameController = controller;
     }
 } 

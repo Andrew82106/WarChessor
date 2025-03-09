@@ -54,7 +54,7 @@
       ],
     
       "gameRules": {
-        "baseIncreaseRate": 5,
+        "baseIncreaseRate": 1,
         "populationIncreaseRate": 1, 
         "headquartersIncreaseRate": 1,
         "politicalCenterEffect": 1,
@@ -126,9 +126,9 @@
       ],
       
       "gameRules": {
-        "baseIncreaseRate": 4,
-        "populationIncreaseRate": 2,
-        "headquartersIncreaseRate": 2,
+        "baseIncreaseRate": 1,
+        "populationIncreaseRate": 1,
+        "headquartersIncreaseRate": 1,
         "politicalCenterEffect": 1.5,
         "fogOfWar": true,
         "visibilityRange": 2,

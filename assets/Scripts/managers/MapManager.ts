@@ -124,31 +124,53 @@ export class MapManager extends Component {
      * 初始化地图
      */
     async initMap(): Promise<boolean> {
+        // 到这里就是在初始化地图了
+        /*
+        async的作用：
+            异步函数：
+            使用async关键字定义的函数会返回一个Promise对象。
+            这意味着该函数可以在执行过程中进行异步操作，而不会阻塞主线程。
+            使用await：
+            在async函数内部，可以使用await关键字来等待一个Promise的完成。
+            await会暂停函数的执行，直到Promise被解决（resolved）或拒绝（rejected）。
+            这使得异步代码的书写方式更接近于同步代码，便于理解和维护。
+            错误处理：
+            在async函数中，可以使用try...catch语句来捕获异步操作中的错误。
+            这使得错误处理变得更加简单和直观。
+        
+            在initMap函数中的具体应用：
+            在initMap函数中，async的使用使得可以在函数内部调用异步方法loadLevelData，
+            并使用await来等待其完成：
+            const levelData = await this.loadLevelData(this.currentLevelId);
+            这行代码会暂停initMap函数的执行，直到loadLevelData返回结果。
+            这意味着在加载关卡数据之前，后续的地图初始化逻辑不会执行，从而确保地图数据的完整性。
+
+        */
         //console.log("MapManager节点路径:", this.node.name);
         //console.log("Tile预制体状态:", this.tilePrefab ? "已设置" : "未设置");
         //console.log("地图容器状态:", this.mapContainer ? "已设置" : "未设置");
         
         // 确保地图数据已加载
         if (!this._mapData) {
-            console.log("地图数据未加载，开始加载关卡数据...");
+            //console.log("地图数据未加载，开始加载关卡数据...");
             const levelData = await this.loadLevelData(this.currentLevelId);
             if (!levelData) {
                 console.error("加载关卡数据失败，无法初始化地图");
                 return false;
             }
-            console.log("加载关卡数据成功，开始初始化地图...");
+            //console.log("加载关卡数据成功，开始初始化地图...");
         }
         
         // 清除现有地图
         this.clearMap();
         
-        console.log("in MapManager initMap function, going to create map grid");
+        //console.log("in MapManager initMap function, going to create map grid");
         // 创建新地图
         this.createMapGrid();
         
         // 设置地图中心位置
         // this.centerMap();
-        console.log("地图初始化完成");
+        //console.log("地图初始化完成");
         return true;
     }
     
@@ -164,6 +186,7 @@ export class MapManager extends Component {
      * 创建地图网格
      */
     createMapGrid(): void {
+        // 这里就是创建地图网格了
         // 检查地图数据是否已加载
         if (!this._mapData) {
             console.error("地图数据未加载");
@@ -199,7 +222,7 @@ export class MapManager extends Component {
             .map(() => Array(this._mapWidth).fill(null));
         
         // 日志输出，标记地图格子创建开始
-        console.log("in MapManager createMapGrid function, 正在创建地图格子，应用地形、所有权和兵力数据...");
+        // console.log("in MapManager createMapGrid function, 正在创建地图格子，应用地形、所有权和兵力数据...");
         
         // 创建所有格子
         for (let y = 0; y < this._mapHeight; y++) {
@@ -257,9 +280,9 @@ export class MapManager extends Component {
         }
         
         // 添加额外调试信息，输出地图格子总数及地图容器的相关信息
-        console.log(`in MapManager createMapGrid function, 创建了 ${this._mapWidth * this._mapHeight} 个Tile`);
-        console.log(`in MapManager createMapGrid function, 地图容器节点层级: ${this.mapContainer.getSiblingIndex()}`);
-        console.log(`in MapManager createMapGrid function, 地图容器世界坐标: ${this.mapContainer.worldPosition}`);
+        // console.log(`in MapManager createMapGrid function, 创建了 ${this._mapWidth * this._mapHeight} 个Tile`);
+        // console.log(`in MapManager createMapGrid function, 地图容器节点层级: ${this.mapContainer.getSiblingIndex()}`);
+        // console.log(`in MapManager createMapGrid function, 地图容器世界坐标: ${this.mapContainer.worldPosition}`);
     }
     
     /**

@@ -23,8 +23,10 @@ export class PlayerManager extends Component {
      * 初始化玩家
      */
     initPlayers(playerDataList: PlayerData[]): void {
+        // 传进来的就是一个玩家数据列表，里面包含所有玩家的信息
         this._players = [];
         this._currentPlayerIndex = 0;
+        // 这个_currentPlayerIndex是干啥用的，可能已经没有用了吧
         this._gameOver = false;
         
         // 根据玩家数据创建玩家对象
@@ -40,6 +42,31 @@ export class PlayerManager extends Component {
             
             this._players.push(player);
         });
+        /*
+        逐部分解释：
+            playerDataList.forEach((playerData, index) => { ... });：
+            这行代码使用forEach方法遍历playerDataList数组中的每个元素。
+            playerData是当前遍历到的玩家数据对象，index是当前元素的索引。
+
+            const playerColor = PLAYER_COLORS[index % PLAYER_COLORS.length];：
+            这行代码根据当前玩家的索引index选择一个颜色。PLAYER_COLORS是一个颜色数组，使用取模运算符%确保索引不会超出数组的范围。
+            例如，如果PLAYER_COLORS数组有3种颜色，索引0、1、2分别对应第一、第二、第三种颜色，索引3会回到第一种颜色（0），以此类推。
+            
+            const player = new Player(...);：
+            这行代码创建一个新的Player对象，使用从playerData中提取的属性来初始化该对象。
+            Player构造函数的参数包括：
+            playerData.id：玩家的唯一标识符。
+            playerData.name：玩家的名称。
+            playerColor：为玩家分配的颜色。
+            playerData.isAI：布尔值，指示该玩家是否为AI。
+            playerData.aiLevel：AI的难度等级（如果适用）。
+            
+            this._players.push(player);：
+            这行代码将新创建的Player对象添加到_players数组中，_players是PlayerManager类的一个私有属性，用于存储所有玩家的实例。
+            总结：
+            这段代码的主要功能是从玩家数据列表playerDataList中创建多个Player对象，
+            并将它们存储在PlayerManager的_players数组中。
+        */
     }
     
     /**

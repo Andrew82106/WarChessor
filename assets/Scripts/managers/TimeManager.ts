@@ -114,11 +114,7 @@ export class TimeManager extends Component {
         
         // 根据游戏速度计算实际时间增量, 这里的dt是每帧的时间
         const scaledDt = dt * this._gameSpeed;
-        
-        // 每5秒输出一次调试信息
-        //if (Math.floor(this._gameTime) % 5 < dt * this._gameSpeed) {
-            ////////console.log(`TimeManager: 游戏时间 ${this._gameTime.toFixed(2)}秒, 速度 x${this._gameSpeed}`);
-        //}
+
         
         // 更新游戏时间
         this._gameTime += scaledDt;
@@ -171,7 +167,8 @@ export class TimeManager extends Component {
             const polIncreaseInterval = this._getResourceInterval('POLITICAL_CENTER', 0);
             if (timers['POLITICAL_CENTER'] >= polIncreaseInterval) {
                 timers['POLITICAL_CENTER'] = 0;
-                this._troopManager.growTroopsForPlayer(playerId, 'POLITICAL_CENTER');
+                // this._troopManager.growTroopsForPlayer(playerId, 'POLITICAL_CENTER');
+                // 政治中心其实不需要计时器，因为政治中心不增加人口数
             }
             
             // 更新大本营增长计时器
@@ -192,19 +189,20 @@ export class TimeManager extends Component {
         
         switch (resourceType) {
             case 'BASIC_LAND':
-                // 基本土地：默认60秒，政治中心每增加1个缩短10秒
-                return Math.max(10, 60 - politicalCenters * 10);
+                // 基本土地：默认25秒，政治中心每增加1个缩短10秒
+                return Math.max(5, 25 - politicalCenters * 10);
             case 'POPULATION_CENTER':
                 // 人口重镇：30秒
-                return 30;
+                return 10;
             case 'POLITICAL_CENTER':
                 // 政治中心：15秒
-                return 15;
+                // 政治中心其实不需要计时器，因为政治中心不增加人口数
+                return 10;
             case 'HEADQUARTERS':
                 // 大本营：10秒
                 return 10;
             default:
-                return 60;
+                return 25;
         }
     }
     
@@ -218,7 +216,7 @@ export class TimeManager extends Component {
         }
         
         // 检查是否有AI玩家
-        const aiPlayers = this._playerManager.getPlayers().filter(player => player.isAI && !player.defeated);
+        // const aiPlayers = this._playerManager.getPlayers().filter(player => player.isAI && !player.defeated);
         
         // AI行为由AIManager处理
         this._aiManager.processAILogic(dt);
@@ -236,25 +234,27 @@ export class TimeManager extends Component {
         // 累加部队移动计时器
         this._troopMovementTimer += dt;
         
-        // 每0.5秒处理一次部队移动
-        const movementInterval = 0.5;
+        // 每2秒处理一次部队移动
+        const movementInterval = 2;
         if (this._troopMovementTimer >= movementInterval) {
             // 重置计时器
             this._troopMovementTimer = 0;
             
             // 处理部队行军队列
             try {
-                const marchingPaths = this._troopManager.getMarchingPaths();
-                if (marchingPaths.length > 0) {
-                    ////console.log(`TimeManager: 处理行军队列，当前有 ${marchingPaths.length} 条行军路径`);
-                    
-                    // 获取第一条路径的详细信息
-                    const firstPath = marchingPaths[0];
-                    ////console.log(`TimeManager: 当前处理的行军路径 - 玩家${firstPath.playerId}, 步骤${firstPath.currentStep+1}/${firstPath.pathTiles.length}, 兵力${firstPath.troops}`);
-                }
+                const marchingPathsMap = this._troopManager.getMarchingPaths();
+                // 检查是否有任何行军路径队列
+                let hasAnyPaths = false;
+                marchingPathsMap.forEach((paths) => {
+                    if (paths.length > 0) {
+                        hasAnyPaths = true;
+                    }
+                });
                 
-                // 执行行军处理
-                this._troopManager.processMarchingQueues();
+                if (hasAnyPaths) {
+                    ////console.log(`TimeManager: 处理行军队列，当前有 ${marchingPathsMap.size} 个玩家的行军路径`);
+                    this._troopManager.processMarchingQueues();
+                }
                 
                 // 同步所有玩家的行军路线计数
                 if (typeof this._troopManager.syncAllPlayerPathCounts === 'function') {
