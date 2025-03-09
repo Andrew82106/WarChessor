@@ -114,8 +114,12 @@ export class TimeManager extends Component {
         
         // 根据游戏速度计算实际时间增量, 这里的dt是每帧的时间
         const scaledDt = dt * this._gameSpeed;
-        //console.log('dt', dt);
-        //console.log('scaledDt', scaledDt);
+        
+        // 每5秒输出一次调试信息
+        //if (Math.floor(this._gameTime) % 5 < dt * this._gameSpeed) {
+            ////////console.log(`TimeManager: 游戏时间 ${this._gameTime.toFixed(2)}秒, 速度 x${this._gameSpeed}`);
+        //}
+        
         // 更新游戏时间
         this._gameTime += scaledDt;
         
@@ -208,7 +212,13 @@ export class TimeManager extends Component {
      * 处理AI行为
      */
     private handleAIBehavior(dt: number): void {
-        if (!this._playerManager || !this._aiManager) return;
+        if (!this._playerManager || !this._aiManager) {
+            console.warn("TimeManager: handleAIBehavior - 玩家管理器或AI管理器未初始化");
+            return;
+        }
+        
+        // 检查是否有AI玩家
+        const aiPlayers = this._playerManager.getPlayers().filter(player => player.isAI && !player.defeated);
         
         // AI行为由AIManager处理
         this._aiManager.processAILogic(dt);
@@ -218,20 +228,44 @@ export class TimeManager extends Component {
      * 处理部队移动
      */
     private handleTroopMovement(dt: number): void {
-        if (!this._troopManager) return;
+        if (!this._troopManager) {
+            console.warn("TimeManager: handleTroopMovement - 部队管理器未初始化");
+            return;
+        }
         
-        // 累加时间
+        // 累加部队移动计时器
         this._troopMovementTimer += dt;
         
-        // 当累积时间达到1秒时处理行军（考虑游戏速度，更快的速度下更快地处理行军）
-        const marchingInterval = 1.0 / this._gameSpeed; // 行军间隔随游戏速度变化
-        
-        if (this._troopMovementTimer >= marchingInterval) {
-            // 处理所有行军队列
-            this._troopManager.processMarchingQueues();
+        // 每0.5秒处理一次部队移动
+        const movementInterval = 0.5;
+        if (this._troopMovementTimer >= movementInterval) {
+            // 重置计时器
+            this._troopMovementTimer = 0;
             
-            // 减去已用时间（保持余数以保证精确的时间控制）
-            this._troopMovementTimer -= marchingInterval;
+            // 处理部队行军队列
+            try {
+                const marchingPaths = this._troopManager.getMarchingPaths();
+                if (marchingPaths.length > 0) {
+                    ////console.log(`TimeManager: 处理行军队列，当前有 ${marchingPaths.length} 条行军路径`);
+                    
+                    // 获取第一条路径的详细信息
+                    const firstPath = marchingPaths[0];
+                    ////console.log(`TimeManager: 当前处理的行军路径 - 玩家${firstPath.playerId}, 步骤${firstPath.currentStep+1}/${firstPath.pathTiles.length}, 兵力${firstPath.troops}`);
+                }
+                
+                // 执行行军处理
+                this._troopManager.processMarchingQueues();
+                
+                // 同步所有玩家的行军路线计数
+                if (typeof this._troopManager.syncAllPlayerPathCounts === 'function') {
+                    this._troopManager.syncAllPlayerPathCounts();
+                }
+                
+                // 通知行军状态更新
+                this.node.emit('marching-status-updated');
+            } catch (error) {
+                console.error("TimeManager: 处理部队移动时发生错误:", error);
+            }
         }
     }
     

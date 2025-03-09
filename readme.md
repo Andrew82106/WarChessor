@@ -17,58 +17,65 @@
   - `getTile(x: number, y: number)`: 获取指定坐标的格子
   - `updateTileTroops(x: number, y: number, troops: number)`: 更新格子兵力
   - `updateTileOwnership(x: number, y: number, ownerId: number)`: 更新格子所有权
+- **地图信息**：
+  以下是针对 `assets/resources/level/levelData.json` 文件中地图信息的说明，适合添加到 README 中：
 
-#### PlayerManager（玩家管理器）
-- **功能职责**：
-  - 管理所有玩家数据和状态（含AI和真实玩家）
-  - 跟踪玩家拥有的土地和资源
-  - 检查玩家胜负条件
-  - 处理多玩家同时操作的状态同步
-- **主要方法**：
-  - `createPlayers(playerCount: number, aiCount: number)`: 创建玩家
-  - `getPlayer(playerId: number)`: 获取指定ID的玩家
-  - `getPlayerColor(playerId: number)`: 获取玩家颜色
-  - `updatePlayerStats(playerId: number)`: 更新玩家统计数据
-  - `checkVictoryCondition()`: 检查胜利条件
+### 地图信息说明
 
-#### TimeManager（时间管理器）
-- **功能职责**：
-  - 管理游戏实时时钟
-  - 处理游戏速度控制（加速/减速/暂停）
-  - 协调各系统的实时更新频率
-  - 触发周期性事件（如兵力增长、资源收集）
-- **主要方法**：
-  - `startGame()`: 开始游戏时钟
-  - `pauseGame()`: 暂停游戏
-  - `resumeGame()`: 恢复游戏
-  - `setGameSpeed(speed: number)`: 设置游戏速度
-  - `scheduleEvent(callback: Function, interval: number)`: 安排周期性事件
+在游戏中，地图数据存储在 `assets/resources/level/levelData.json` 文件中。该文件包含多个关卡的地图信息，每个关卡的地图数据结构如下：
 
-#### TroopManager（部队管理器）
-- **功能职责**：
-  - 管理部队实时移动和战斗逻辑
-  - 维护并行的行军路径队列
-  - 处理兵力分配和战斗解算
-  - 实现行军状态更新和反馈
-- **主要方法**：
-  - `createMarchingPath(playerId: number, sourceTile: Vec2, targetTiles: Vec2[], troops: number)`: 创建行军路径
-  - `processMarchingQueues()`: 实时处理所有行军队列
-  - `resolveCombat(attackerId: number, defenderX: number, defenderY: number, attackingTroops: number)`: 解决战斗
-  - `getMarchingStatus()`: 获取行军状态
-  - `updateMarchingStatus()`: 更新行军状态
+- **id**: 关卡的唯一标识符。
+- **name**: 关卡的名称。
+- **description**: 关卡的描述，提供玩家对关卡的背景信息。
+- **difficulty**: 关卡的难度等级，数值越大表示难度越高。
+- **mapSize**: 地图的尺寸，包含宽度（width）和高度（height）。
+- **developed**: 布尔值，指示关卡是否已开发完成。
+- **unlocked**: 布尔值，指示关卡是否已解锁，可以被玩家访问。
+- **mapData**: 地图的具体数据，包含以下字段：
+  - **terrain**: 地形类型矩阵，表示地图上不同区域的地形类型。地形类型由 `TerrainType` 枚举定义，包括：
+    - **基本土地** (0): 可正常通行和占领的基本地形
+    - **人口重镇** (1): 提供额外资源增长的特殊地形
+    - **政治中心** (2): 提供战略优势的重要地形
+    - **大本营** (3): 玩家的主要基地
+    - **高山** (4): 不可通行的地形，士兵无法穿越或占领
+    - **湖泊** (5): 不可通行的地形，士兵无法穿越或占领
+  - **ownership**: 土地所有权矩阵，表示每个格子当前的所有者ID。-1 表示该格子没有被任何玩家占领。
+  - **troops**: 驻军数量矩阵，表示每个格子上驻扎的兵力数量。
+  - **headquarters**: 大本营位置数组，包含每个玩家的大本营坐标，格式为 [玩家ID, x, y]。
 
-#### AIManager（AI管理器）
-- **功能职责**：
-  - 实现AI实时决策逻辑
-  - 根据AI难度执行不同策略
-  - 评估地图态势并做出行动决策
-  - 与玩家同步行动，提供实时挑战
-- **主要方法**：
-  - `processAILogic(deltaTime: number)`: 执行AI逻辑，每帧调用
-  - `evaluateMap()`: 评估地图态势
-  - `findBestTarget()`: 寻找最佳攻击目标
-  - `selectAttackPath()`: 选择进攻路径
-  - `planDefense()`: 规划防御策略
+- **players**: 关卡中的玩家信息数组，每个玩家包含以下字段：
+  - **id**: 玩家唯一标识符。
+  - **name**: 玩家名称。
+  - **isAI**: 布尔值，指示该玩家是否为AI。
+  - **aiLevel**: AI的难度等级（可选）。
+
+- **gameRules**: 游戏规则设置，包含以下字段：
+  - **baseIncreaseRate**: 基本土地增长周期。
+  - **populationIncreaseRate**: 人口重镇的增长速率。
+  - **headquartersIncreaseRate**: 大本营的增长速率。
+  - **politicalCenterEffect**: 政治中心的效果。
+  - **fogOfWar**: 布尔值，指示是否开启战争迷雾。
+  - **visibilityRange**: 视野范围。
+  - **winCondition**: 胜利条件，定义玩家获胜的标准。
+
+#### 不可到达地形说明
+
+游戏中的不可到达地形（高山、湖泊）具有以下特性：
+
+1. **视觉表现**：高山和湖泊分别以不同颜色显示（棕褐色表示高山，蓝色表示湖泊）。
+2. **交互限制**：
+   - 玩家无法选择这些地形格子。
+   - 这些格子不能被高亮显示。
+   - 士兵无法被派遣到这些格子。
+3. **寻路影响**：
+   - 自动寻路算法会避开这些不可到达的地形。
+   - 如果玩家尝试派遣士兵经过这些地形，游戏会自动寻找绕过的路径。
+   - 如果无法找到到达目标的路径，派遣操作会被取消。
+4. **战略意义**：
+   - 不可到达地形可用于创建自然障碍，增加地图的策略性。
+   - 这些障碍可以形成防御点或者迫使玩家选择特定的进攻路线。
+
+要在关卡中添加不可到达的地形，只需在 `levelData.json` 文件的相应关卡的 `mapData.terrain` 矩阵中使用值 `4`（高山）或 `5`（湖泊）即可。
 
 ### 2. 组件系统
 
@@ -248,7 +255,60 @@ assets/
 
 ## 五、扩展功能与未来计划
 
+### 1. 游戏结束判断机制优化
+
+#### 多层次游戏结束检测
+- **大本营占领检测**：
+  - 基于大本营归属进行胜负判断，而非玩家状态标记
+  - 当玩家占领敌方大本营时，立即标记敌方为已击败状态
+  - 全部敌方大本营被占领时，人类玩家胜利；人类玩家大本营被占领时，游戏失败
+
+#### 高频率结束条件检查
+- **多重触发点**：
+  - 地块所有权变更时：`MapManager.checkHeadquartersStatus()`直接检查大本营状态
+  - 定期检查：每3秒在`LocalGameController.update()`中执行一次全面检查
+  - 事件驱动：所有可能导致游戏结束的事件（战斗、行军等）都会触发检查
+
+#### 实现要点
+- **不依赖固定ID**：使用`isAI`属性而非硬编码ID区分玩家类型
+- **增强事件响应**：添加多级事件监听确保事件正确传播
+- **详细日志**：使用【大本营】标签统一日志格式，方便调试跟踪
+
+#### 技术细节
+```typescript
+// MapManager中直接检查大本营状态
+private checkHeadquartersStatus(x: number, y: number, newOwnerId: number, oldOwnerId: number): void {
+    // 检查变更的地块是否是某个玩家的大本营
+    this._players.forEach(player => {
+        if (player.headquarters && player.headquarters.x === x && player.headquarters.y === y) {
+            // 如果大本营被占领，标记玩家为已击败
+            if (player.id !== newOwnerId) {
+                player.defeated = true;
+                this.node.emit('player-defeated', player.id);
+            }
+        }
+    });
+}
+
+// LocalGameController定期检查
+private _checkGameEndCondition() {
+    // 检查所有大本营状态
+    let allAIDefeated = true;
+    let humanDefeated = true;
+    
+    // 检查基于玩家类型而非ID
+    const humanPlayers = this._playerManager.getPlayers().filter(p => !p.isAI);
+    const aiPlayers = this._playerManager.getPlayers().filter(p => p.isAI);
+    
+    // 检查胜负条件并显示结果
+    if (allAIDefeated && !humanDefeated) {
+        this._gameOver = true;
+        this._timeManager?.pauseGame();
+        gameOverPanelComponent.showGameOver(true, aiPlayers.length);
+    } 
+}
+```
 
 
 ## 六、总结
-WarChessor是一个基于Cocos Creator开发的实时战略棋盘游戏，结合了RTS的策略性和棋盘游戏的精确操作。通过实时AI行为和玩家并行操作，提供了紧张刺激的游戏体验。项目采用模块化设计，各系统间松耦合，便于扩展和维护。未来将持续优化游戏性能，并添加更多特色玩法，为玩家提供更丰富的战略选择。
+WarChessor是一个基于Cocos Creator开发的实时战略棋盘游戏，结合了RTS的策略性和棋盘游戏的精确操作。通过实时AI行为和玩家并行操作，提供了紧张刺激的游戏体验。项目采用模块化设计，各系统间松耦合，便于扩展和维护。游戏结束判断机制基于大本营控制权，确保游戏结果的准确判定。未来将持续优化游戏性能，并添加更多特色玩法，为玩家提供更丰富的战略选择。

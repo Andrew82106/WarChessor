@@ -14,6 +14,7 @@ export class Player {
     headquarters?: Vec2;         // 大本营位置
     defeated: boolean = false;   // 是否已被击败
     decisionTimer: number = 0;   // AI决策计时器（用于实时游戏模式）
+    activePathCount: number = 0; // 玩家当前活跃的行军路线数量
 
     constructor(id: number, name: string, color: Color, isAI: boolean, aiLevel?: number) {
         this.id = id;

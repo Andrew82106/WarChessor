@@ -165,12 +165,68 @@ export class PlayerManager extends Component {
      * @returns 胜利玩家ID，如果没有则返回-1
      */
     checkWinCondition(): number {
-        // 检查是否只剩一个玩家未被击败
-        const activePlayers = this._players.filter(player => !player.defeated);
+        if (!this._players.length) return -1;
         
-        if (activePlayers.length === 1) {
+        // 找出人类玩家和AI玩家
+        const humanPlayers = this._players.filter(p => !p.isAI);
+        const aiPlayers = this._players.filter(p => p.isAI);
+        
+        console.log(`【大本营】胜利条件检查: 人类玩家数=${humanPlayers.length}, AI玩家数=${aiPlayers.length}`);
+        
+        // 检查每个玩家的大本营归属
+        this._players.forEach(player => {
+            if (!player.headquarters) {
+                console.log(`【大本营】警告: 玩家${player.id}(${player.name})没有设置大本营位置`);
+                return;
+            }
+            
+            // 获取该玩家大本营的当前所有者
+            const mapManager = this.node.parent?.getComponentInChildren('MapManager');
+            if (!mapManager) {
+                console.log(`【大本营】错误: 无法获取MapManager组件`);
+                return;
+            }
+            
+            // 使用as MapManager来指定类型
+            const hqTile = (mapManager as any).getTile(player.headquarters.x, player.headquarters.y);
+            if (!hqTile) {
+                console.log(`【大本营】错误: 找不到玩家${player.id}的大本营位置[${player.headquarters.x},${player.headquarters.y}]`);
+                return;
+            }
+            
+            const hqOwnerId = hqTile.ownerId;
+            console.log(`【大本营】检查: 玩家${player.id}(${player.name})的大本营位置[${player.headquarters.x},${player.headquarters.y}]当前归属于玩家${hqOwnerId}`);
+            
+            // 如果大本营不属于自己，标记为已击败
+            if (hqOwnerId !== player.id) {
+                console.log(`【大本营】玩家${player.id}(${player.name})的大本营已被占领，玩家被击败`);
+                player.defeated = true;
+            }
+        });
+        
+        // 检查是否所有AI都被击败
+        const allAIDefeated = aiPlayers.every(p => p.defeated);
+        
+        // 检查人类玩家是否被击败
+        const humanDefeated = humanPlayers.length > 0 && humanPlayers.every(p => p.defeated);
+        
+        console.log(`【大本营】胜利条件分析: 所有AI被击败=${allAIDefeated}, 人类被击败=${humanDefeated}`);
+        
+        // 如果所有AI都被击败，人类胜利
+        if (allAIDefeated && !humanDefeated && humanPlayers.length > 0) {
             this._gameOver = true;
-            return activePlayers[0].id;
+            console.log(`【大本营】胜利条件满足: 所有AI大本营被占领，人类玩家胜利`);
+            return humanPlayers[0].id; // 返回人类玩家ID
+        }
+        
+        // 如果人类被击败，AI胜利
+        if (humanDefeated) {
+            this._gameOver = true;
+            console.log(`【大本营】胜利条件满足: 人类玩家大本营被占领，游戏失败`);
+            
+            // 找出没有被击败的AI作为胜利者
+            const victoriousAI = aiPlayers.find(p => !p.defeated);
+            return victoriousAI ? victoriousAI.id : -1;
         }
         
         return -1;

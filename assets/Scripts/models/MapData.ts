@@ -7,7 +7,9 @@ export enum TerrainType {
     BASIC_LAND = 0,        // 基本土地
     POPULATION_CENTER = 1, // 人口重镇
     POLITICAL_CENTER = 2,  // 政治中心
-    HEADQUARTERS = 3       // 大本营
+    HEADQUARTERS = 3,       // 大本营
+    MOUNTAIN = 4,          // 高山（不可通行）
+    LAKE = 5               // 湖泊（不可通行）
 }
 
 /**

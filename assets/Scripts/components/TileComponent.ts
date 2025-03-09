@@ -32,13 +32,55 @@ export class TileComponent extends Component {
     private _isSelected: boolean = false; // 是否被选中
     private _isMarkedForMove: boolean = false; // 是否被标记为行军目标
     
-    // 地形颜色映射
+    // 地形颜色映射 - 使用更明确的颜色，避免与玩家颜色混淆
     private _terrainColors: {[key: number]: Color} = {
-        [TerrainType.BASIC_LAND]: new Color(220, 220, 220, 255),
-        [TerrainType.POPULATION_CENTER]: new Color(150, 220, 150, 255),
-        [TerrainType.POLITICAL_CENTER]: new Color(150, 150, 220, 255),
-        [TerrainType.HEADQUARTERS]: new Color(220, 150, 150, 255)
+        [TerrainType.BASIC_LAND]: new Color(200, 200, 200, 255),          // 基本土地：中灰色
+        [TerrainType.POPULATION_CENTER]: new Color(70, 180, 70, 255),     // 人口重镇：绿色
+        [TerrainType.POLITICAL_CENTER]: new Color(160, 120, 220, 255),    // 政治中心：紫色
+        [TerrainType.HEADQUARTERS]: new Color(220, 180, 80, 255),         // 大本营：金色（主要被边框体现）
+        [TerrainType.MOUNTAIN]: new Color(130, 110, 90, 255),             // 山脉：棕色
+        [TerrainType.LAKE]: new Color(140, 190, 230, 255)                 // 湖泊：浅灰蓝色
     };
+    
+    // 地形图标索引（用于设置terrainIcon的精灵帧索引）
+    private _terrainIconIndices: {[key: number]: number} = {
+        [TerrainType.BASIC_LAND]: -1,               // 基本土地：无图标
+        [TerrainType.POPULATION_CENTER]: 0,         // 人口重镇：图标0
+        [TerrainType.POLITICAL_CENTER]: 1,          // 政治中心：图标1
+        [TerrainType.HEADQUARTERS]: 2,              // 大本营：图标2
+        [TerrainType.MOUNTAIN]: 3,                  // 山脉：图标3
+        [TerrainType.LAKE]: 4                       // 湖泊：图标4
+    };
+    
+    // 是否是不可到达的地形
+    private get _isImpassable(): boolean {
+        return this._terrainType === TerrainType.MOUNTAIN || 
+               this._terrainType === TerrainType.LAKE;
+    }
+    
+    // 大本营检查
+    private get _isHeadquarters(): boolean {
+        return this._terrainType === TerrainType.HEADQUARTERS;
+    }
+    
+    // 地形是否可被占领
+    private get _canBeOwned(): boolean {
+        return !this._isImpassable;
+    }
+    
+    // 混合颜色方法：将地形颜色和玩家颜色混合
+    private _blendColors(terrainColor: Color, playerColor: Color, blendFactor: number = 0.4): Color {
+        // 创建新的颜色对象，防止修改原始颜色
+        const result = new Color();
+        
+        // 混合公式：result = terrainColor * (1 - blendFactor) + playerColor * blendFactor
+        result.r = Math.floor(terrainColor.r * (1 - blendFactor) + playerColor.r * blendFactor);
+        result.g = Math.floor(terrainColor.g * (1 - blendFactor) + playerColor.g * blendFactor);
+        result.b = Math.floor(terrainColor.b * (1 - blendFactor) + playerColor.b * blendFactor);
+        result.a = 255; // 确保完全不透明
+        
+        return result;
+    }
     
     /**
      * 初始化
@@ -108,8 +150,14 @@ export class TileComponent extends Component {
      * 设置格子的地形类型
      */
     set terrainType(type: TerrainType) {
+        const oldType = this._terrainType;
         this._terrainType = type;
-        this.updateTerrainDisplay();
+        
+        // 仅当地形类型改变时更新显示
+        if (oldType !== type) {
+            console.log(`Tile [${this._gridPosition.x},${this._gridPosition.y}] 地形类型从 ${oldType} 变为 ${type}`);
+            this.updateTerrainDisplay();
+        }
     }
     
     get terrainType(): TerrainType {
@@ -120,8 +168,14 @@ export class TileComponent extends Component {
      * 设置格子的所有者
      */
     set ownerId(id: number) {
+        const oldId = this._ownerId;
         this._ownerId = id;
-        this.updateOwnerDisplay();
+        
+        // 仅当所有者改变时更新显示
+        if (oldId !== id) {
+            console.log(`Tile [${this._gridPosition.x},${this._gridPosition.y}] 所有者从 ${oldId} 变为 ${id}`);
+            this.updateOwnerDisplay();
+        }
     }
     
     get ownerId(): number {
@@ -132,15 +186,18 @@ export class TileComponent extends Component {
      * 设置格子上的驻军数量
      */
     set troops(amount: number) {
+        const oldAmount = this._troops;
         this._troops = Math.max(0, amount); // 确保不小于0
-        this.updateTroopsDisplay();
         
-        // 当兵力为0时，可能需要更新显示
-        if (this._troops === 0) {
-            this.updateOwnerDisplay(); // 更新为灰色
+        // 仅当兵力改变时更新显示
+        if (oldAmount !== this._troops) {
+            // 当兵力为0或从0变为非0时，可能需要更新所有者显示
+            if (oldAmount === 0 || this._troops === 0) {
+                this.updateOwnerDisplay(); // 兵力变为0可能需要变更颜色
+            }
+            
+            this.updateTroopsDisplay();
         }
-        
-        //console.log(`Tile [${this._gridPosition.x},${this._gridPosition.y}] 设置兵力: ${this._troops}`);
     }
     
     get troops(): number {
@@ -199,23 +256,18 @@ export class TileComponent extends Component {
     private updateTerrainDisplay() {
         if (!this.background) return;
 
-        // 如果有地形图标，设置显示
+        // 是否有地形图标，设置显示
         if (this.terrainIcon) {
-            this.terrainIcon.node.active = this._terrainType !== TerrainType.BASIC_LAND;
+            // 为除了基本土地外的地形显示图标
+            const shouldShowIcon = this._terrainType !== TerrainType.BASIC_LAND;
+            this.terrainIcon.node.active = shouldShowIcon;
             
-            // 根据地形类型可以设置不同的图标
-            switch(this._terrainType) {
-                case TerrainType.POPULATION_CENTER:
-                    // 设置人口重镇图标
-                    break;
-                case TerrainType.POLITICAL_CENTER:
-                    // 设置政治中心图标
-                    break;
-                case TerrainType.HEADQUARTERS:
-                    // 设置大本营图标
-                    break;
-            }
+            // 注意：需要在Cocos Creator中为不同地形准备图标资源
+            // 当前默认将特殊地形的图标打开，但未设置具体图片
         }
+        
+        // 更新所有者显示，这会设置颜色
+        this.updateOwnerDisplay();
     }
     
     /**
@@ -227,48 +279,139 @@ export class TileComponent extends Component {
             return;
         }
         
-        // 检查精灵帧
-        if (!this.background.spriteFrame) {
-            console.error(`Tile [${this._gridPosition.x},${this._gridPosition.y}] 精灵帧未设置，请在编辑器中为Tile预制体的背景组件设置精灵帧!`);
+        // 查看错误的地形类型
+        if (this._terrainType < 0 || this._terrainType > 5) {
+            console.error(`非法地形类型: ${this._terrainType}，位置: [${this._gridPosition.x},${this._gridPosition.y}]`);
+            this.background.color = new Color(255, 0, 255, 255); // 紫色表示错误
+            return;
         }
         
-        // 根据格子所有者设置不同颜色
-        let color: Color;
-        if (this._ownerId !== -1) {
-            // 当玩家ID为-1时表示无主
-            // 尝试从游戏根节点获取PlayerManager
+        // 获取当前地形的基础颜色
+        const terrainColor = this._terrainColors[this._terrainType];
+        if (!terrainColor) {
+            console.error(`未知地形类型: ${this._terrainType}，使用默认灰色, 位置: [${this._gridPosition.x},${this._gridPosition.y}]`);
+            this.background.color = new Color(150, 150, 150, 255);
+            return;
+        }
+        
+        // 设置默认颜色为地形颜色的副本（避免修改原始对象）
+        const finalColor = new Color(
+            terrainColor.r,
+            terrainColor.g,
+            terrainColor.b,
+            255
+        );
+        
+        // 不可到达的地形保持原始颜色
+        if (this._isImpassable) {
+            this.background.color = finalColor;
+            return;
+        }
+        
+        // 根据格子所有者设置颜色
+        if (this._ownerId !== -1 && this._troops > 0) {
+            // 有主地块
+            // 尝试获取PlayerManager
             const playerManager = director.getScene()?.getComponentInChildren(PlayerManager);
             if (playerManager) {
-                // 使用玩家颜色，这里会调用PlayerManager的getPlayerColor函数
-                color = playerManager.getPlayerColor(this._ownerId);
-                
-                // 玩家ID超出范围或未找到时的警告
-                if (color.equals(new Color(200, 200, 200, 255))) {
-                    console.warn(`警告: Tile [${this._gridPosition.x},${this._gridPosition.y}] 所有者ID ${this._ownerId} 可能无效，正使用默认灰色`);
+                // 获取玩家
+                const player = playerManager.getPlayerById(this._ownerId);
+                if (player) {
+                    const playerColor = player.color;
+                    
+                    // 对于大本营，直接使用玩家颜色（金色边框会在节点结构中添加）
+                    if (this._isHeadquarters) {
+                        // 将背景设置为金色
+                        finalColor.r = 255; // 金色
+                        finalColor.g = 215;
+                        finalColor.b = 0;
+                        
+                        // 不再更新大本营边框
+                        // this.updateHeadquartersBorder(true);
+                        
+                        // 更新数字标签为玩家颜色
+                        if (this.troopsLabel) {
+                            this.troopsLabel.color = new Color(
+                                playerColor.r,
+                                playerColor.g,
+                                playerColor.b,
+                                255
+                            );
+                        }
+                    } else {
+                        // 混合地形颜色和玩家颜色
+                        // 为特殊地形保留更多原始颜色
+                        let blendFactor = 0.6; // 默认混合比例：60%玩家颜色
+                        
+                        if (this._terrainType !== TerrainType.BASIC_LAND) {
+                            // 特殊地形使用较低的混合比例
+                            blendFactor = 0.3; // 特殊地形：30%玩家颜色
+                        }
+                        
+                        // 安全的颜色混合
+                        finalColor.r = Math.max(0, Math.min(255, Math.round(terrainColor.r * (1 - blendFactor) + playerColor.r * blendFactor)));
+                        finalColor.g = Math.max(0, Math.min(255, Math.round(terrainColor.g * (1 - blendFactor) + playerColor.g * blendFactor)));
+                        finalColor.b = Math.max(0, Math.min(255, Math.round(terrainColor.b * (1 - blendFactor) + playerColor.b * blendFactor)));
+                    }
+                } else {
+                    console.warn(`找不到ID为${this._ownerId}的玩家，使用原始地形颜色, 位置: [${this._gridPosition.x},${this._gridPosition.y}]`);
+                    
+                    // 如果是大本营但找不到玩家，仍需处理边框
+                    if (this._isHeadquarters) {
+                        // this.updateHeadquartersBorder(false);
+                    }
                 }
             } else {
-                console.error(`无法获取PlayerManager，Tile [${this._gridPosition.x},${this._gridPosition.y}] 使用默认红色`);
-                color = new Color(255, 100, 100, 255); // 默认红色
+                console.error(`无法获取PlayerManager，使用原始地形颜色, 位置: [${this._gridPosition.x},${this._gridPosition.y}]`);
                 
-                // 尝试从不同路径获取PlayerManager
-                const scene = director.getScene();
-                if (scene) {
-                    //console.log(`当前场景名: ${scene.name}, 节点结构:`);
-                    this.logNodeHierarchy(scene, 0);
+                // 如果是大本营但找不到PlayerManager，仍需处理边框
+                if (this._isHeadquarters) {
+                    // this.updateHeadquartersBorder(false);
                 }
             }
         } else {
-            // 无主地块 或 无士兵地块，使用灰色
-            if (this._troops <= 0) {
-                color = new Color(150, 150, 150, 255); // 暗灰色
-            } else {
-                color = new Color(180, 180, 180, 255); // 浅灰色
+            // 无主地块，如果是大本营则去除金色边框
+            if (this._isHeadquarters) {
+                // this.updateHeadquartersBorder(false);
             }
         }
         
-        // 确保颜色完全不透明
-        color.a = 255;
-        this.background.color = color;
+        // 应用最终颜色
+        this.background.color = finalColor;
+    }
+    
+    /**
+     * 更新大本营金色边框
+     * @param show 是否显示金色边框
+     */
+    public updateHeadquartersBorder(show: boolean): void {
+        console.log(`【大本营】格子[${this._gridPosition.x},${this._gridPosition.y}]${show ? '显示' : '隐藏'}金色边框`);
+        
+        // 查找或创建边框节点
+        let borderNode = this.node.getChildByName('GoldenBorder');
+        
+        if (!borderNode && show) {
+            // 创建金色边框节点
+            borderNode = new Node('GoldenBorder');
+            this.node.addChild(borderNode);
+            
+            // 添加Sprite组件
+            const sprite = borderNode.addComponent(Sprite);
+            
+            // 大小略大于背景
+            borderNode.setScale(1.1, 1.1);
+            
+            // 设置z索引使其在背景下方但在其他元素上方
+            borderNode.setSiblingIndex(1);
+            
+            // 设置金色
+            sprite.color = new Color(255, 215, 0, 255); // 金色
+            console.log(`【大本营】为格子[${this._gridPosition.x},${this._gridPosition.y}]创建了新的金色边框`);
+        }
+        
+        if (borderNode) {
+            borderNode.active = show;
+        }
     }
     
     /**
@@ -296,7 +439,10 @@ export class TileComponent extends Component {
      * @param highlight 是否高亮
      */
     setHighlight(highlight: boolean): void {
-        //console.log(`TileComponent: 设置高亮状态 [${this._gridPosition.x},${this._gridPosition.y}], highlight=${highlight}`);
+        // 不可到达的地形不能高亮
+        if (this._isImpassable) {
+            return;
+        }
         
         // 查找高亮节点
         const highlightNode = this.node.getChildByName('Highlight');
@@ -329,6 +475,12 @@ export class TileComponent extends Component {
             return;
         }
         
+        // 不可到达的地形（山脉/湖泊）不显示兵力
+        if (this._isImpassable) {
+            this.troopsLabel.node.active = false;
+            return;
+        }
+        
         // 设置兵力文本
         this.troopsLabel.string = this._troops.toString();
         
@@ -338,13 +490,9 @@ export class TileComponent extends Component {
         // 根据兵力数量设置文本颜色
         if (this._troops === 0) {
             this.troopsLabel.color = new Color(100, 100, 100, 255); // 灰色文本
-            //console.log(`Tile [${this._gridPosition.x},${this._gridPosition.y}] 兵力为0，设置灰色文本`);
         } else {
             this.troopsLabel.color = new Color(255, 255, 255, 255); // 白色文本
-            //console.log(`Tile [${this._gridPosition.x},${this._gridPosition.y}] 兵力为${this._troops}，设置黑色文本`);
         }
-        
-        //console.log(`Tile [${this._gridPosition.x},${this._gridPosition.y}] 更新兵力显示: ${this._troops}`);
     }
     
     /**
@@ -378,10 +526,16 @@ export class TileComponent extends Component {
      * 处理Tile点击事件
      */
     private onTileClicked() {
-        //console.log(`TileComponent: 格子 [${this._gridPosition.x},${this._gridPosition.y}] 被点击`);
         console.log(`======= Tile [${this.gridPosition.x},${this.gridPosition.y}] 被点击 =======`);
         console.log("所有者:", this.ownerId, "兵力:", this.troops);
         console.log("当前高亮状态:", this.highlightNode.active);
+        console.log("地形类型:", this._terrainType, "是否不可到达:", this._isImpassable);
+        
+        // 如果是不可到达的地形，不触发选择事件
+        if (this._isImpassable) {
+            console.log(`TileComponent: 不可到达的地形 [${this.gridPosition.x},${this.gridPosition.y}] 被点击，忽略`);
+            return;
+        }
         
         // 发送事件到场景
         const scene = director.getScene();

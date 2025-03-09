@@ -9,6 +9,7 @@ import { LevelData } from './models/MapData';
 import { TerrainType } from './models/MapData';
 import { tween } from 'cc';
 import { Tween } from 'cc';
+import { GameOverPanel } from './ui/GameOverPanel';
 
 const { ccclass, property } = _decorator;
 
@@ -51,6 +52,15 @@ export class LocalGameController extends Component {
     @property(Prefab)
     marchingStatusItemPrefab: Prefab = null!;  // 行军状态项预制体
     
+    @property(Node)
+    playerStatsPanel: Node = null!;  // 玩家状态面板
+    
+    @property(Prefab)
+    playerStatItemPrefab: Prefab = null!;  // 玩家状态项预制体
+    
+    @property(Node)
+    gameOverPanel: Node = null!;  // 游戏结束面板
+    
     // 各个管理器引用
     private _mapManager: MapManager | null = null;
     private _playerManager: PlayerManager | null = null;
@@ -86,6 +96,9 @@ export class LocalGameController extends Component {
         
         // 初始化行军状态面板
         this._initMarchingStatusPanel();
+        
+        // 初始化玩家状态面板
+        this._initPlayerStatsPanel();
     }
     
     /**
@@ -124,12 +137,12 @@ export class LocalGameController extends Component {
         
         // 设置大本营位置
         if (this._levelData.mapData.headquarters) {
-            //console.log("in LocalGameController start function, 设置玩家大本营位置...");
+            console.log("【大本营】开始设置玩家大本营位置...");
             this._levelData.mapData.headquarters.forEach(hq => {
                 const playerId = hq[0];
                 const x = hq[1];
                 const y = hq[2];
-                //console.log(`玩家 ${playerId} 的大本营位置设为 (${x}, ${y})`);
+                console.log(`【大本营】玩家${playerId}的大本营位置设为[${x},${y}]`);
                 this._playerManager?.setPlayerHeadquarters(playerId, new Vec2(x, y));
             });
         }
@@ -154,6 +167,9 @@ export class LocalGameController extends Component {
         
         // 更新UI显示
         this._updateUI();
+        
+        // 更新玩家拥有的地块列表
+        this._updatePlayerOwnedTiles();
         
         // 开始游戏回合
         this._timeManager?.startGame();
@@ -237,16 +253,9 @@ export class LocalGameController extends Component {
      * 设置事件监听
      */
     private _setupEventListeners() {
-        console.log("======= 设置事件监听器 =======");
-        // 设置游戏速度按钮点击事件
+        // 设置结束回合按钮点击事件
         if (this.endTurnButton) {
             this.endTurnButton.node.on(Button.EventType.CLICK, this._onEndTurnButtonClicked, this);
-            
-            // 更新按钮文本
-            const buttonLabel = this.endTurnButton.getComponentInChildren(Label);
-            if (buttonLabel) {
-                buttonLabel.string = `速度 x1`;
-            }
         }
         
         // 设置派遣按钮点击事件
@@ -254,22 +263,79 @@ export class LocalGameController extends Component {
             this.dispatchButton.node.on(Button.EventType.CLICK, this._onDispatchButtonClicked, this);
         }
         
-        // 监听格子选择事件
+        // 监听tile选择事件
         this.node.on('tile-selected', this._onTileSelected, this);
         
-        // 在场景级别也监听格子选择事件
-        director.getScene()?.on('tile-selected', (tile) => {
-            this._onTileSelected(tile);
-        }, this);
+        // 在场景级别监听tile选择事件，确保在任何地方都能捕获
+        const scene = director.getScene();
+        if (scene) {
+            scene.on('tile-selected', this._onTileSelected, this);
+        }
         
         // 监听时间更新事件
         this.node.on('time-updated', this._onTimeUpdated, this);
         
-        // 监听玩家失败事件
+        // 监听玩家击败和游戏结束事件
         this.node.on('player-defeated', this._onPlayerDefeated, this);
-        
-        // 监听游戏结束事件
         this.node.on('game-over', this._onGameOver, this);
+        
+        // 监听地块所有权变更事件，检查是否影响大本营
+        this.node.on('tile-ownership-changed', (data) => {
+            console.log(`【大本营】接收到地块所有权变更事件: 坐标[${data.x},${data.y}], 从玩家${data.oldOwnerId}变为玩家${data.newOwnerId}`);
+            
+            // 当任何地块所有权变更时，主动检查一次游戏结束条件
+            this._checkGameEndCondition();
+            
+            // 更新玩家拥有地块和状态
+            this._updatePlayerOwnedTiles();
+            this._updatePlayerStats();
+        });
+        
+        // 监听行军状态变化事件，及时更新玩家状态
+        this.node.on('marching-status-updated', () => {
+            // 行军状态变化可能导致玩家地块和兵力变化，需要更新状态
+            this._updatePlayerOwnedTiles();
+            this._updatePlayerStats();
+            
+            // 行军状态变化也可能导致大本营变更，检查游戏结束条件
+            this._checkGameEndCondition();
+        }, this);
+        
+        // 监听战斗结果事件，及时更新玩家状态
+        this.node.on('combat-resolved', () => {
+            // 战斗结束后需要更新玩家地块和兵力
+            this._updatePlayerOwnedTiles();
+            this._updatePlayerStats();
+            
+            // 战斗可能导致大本营被占领，检查游戏结束条件
+            this._checkGameEndCondition();
+        }, this);
+        
+        // 也在场景级别监听这些事件
+        if (scene) {
+            scene.on('tile-ownership-changed', (data) => {
+                // 场景级别也执行相同的逻辑
+                console.log(`【大本营】场景级接收到地块所有权变更: [${data.x},${data.y}]`);
+                this._updatePlayerOwnedTiles();
+                this._updatePlayerStats();
+                this._checkGameEndCondition();
+            }, this);
+            
+            scene.on('marching-status-updated', () => {
+                this._updatePlayerOwnedTiles();
+                this._updatePlayerStats();
+                this._checkGameEndCondition();
+            }, this);
+            
+            scene.on('combat-resolved', () => {
+                this._updatePlayerOwnedTiles();
+                this._updatePlayerStats();
+                this._checkGameEndCondition();
+            }, this);
+            
+            scene.on('player-defeated', this._onPlayerDefeated, this);
+            scene.on('game-over', this._onGameOver, this);
+        }
     }
     
     /**
@@ -297,6 +363,47 @@ export class LocalGameController extends Component {
         
         // 更新行军状态信息
         this._updateMarchingStatus();
+        
+        // 更新AI路径限制UI（如果存在）
+        this._updateAIPathLimitUI();
+    }
+    
+    /**
+     * 更新AI路径限制UI
+     */
+    private _updateAIPathLimitUI() {
+        if (!this._aiManager) return;
+        
+        // 如果有AI路径限制显示标签，更新其内容
+        const aiPathLimitLabel = this.gameUI?.getChildByName('AIPathLimitLabel')?.getComponent(Label);
+        if (aiPathLimitLabel) {
+            aiPathLimitLabel.string = `AI路径限制: ${this._aiManager.maxAIPathLimit}`;
+        }
+    }
+    
+    /**
+     * 增加AI路径限制
+     */
+    private _increaseAIPathLimit() {
+        if (!this._aiManager) return;
+        
+        this._aiManager.maxAIPathLimit++;
+        console.log(`AI路径限制增加到 ${this._aiManager.maxAIPathLimit}`);
+        this._updateAIPathLimitUI();
+    }
+    
+    /**
+     * 减少AI路径限制
+     */
+    private _decreaseAIPathLimit() {
+        if (!this._aiManager) return;
+        
+        // 确保不小于1
+        if (this._aiManager.maxAIPathLimit > 1) {
+            this._aiManager.maxAIPathLimit--;
+            console.log(`AI路径限制减少到 ${this._aiManager.maxAIPathLimit}`);
+        }
+        this._updateAIPathLimitUI();
     }
     
     /**
@@ -347,6 +454,43 @@ export class LocalGameController extends Component {
         const marchingPaths = this._troopManager.getMarchingPaths();
         //console.log(`当前行军路径数量: ${marchingPaths.length}`);
         
+        // 如果有玩家管理器，显示各玩家的行军路线数量
+        if (this._playerManager) {
+            const players = this._playerManager.getPlayers();
+            
+            // 获取人类玩家和AI玩家
+            const humanPlayers = players.filter(player => !player.isAI && !player.defeated);
+            const aiPlayers = players.filter(player => player.isAI && !player.defeated);
+            
+            // 显示人类玩家的行军路线数量
+            humanPlayers.forEach(player => {
+                // 获取最新的行军路线数量（当前队列中的）
+                const count = this._troopManager!.getPlayerActivePathCount(player.id);
+                const statusText = `玩家${player.name}: ${count}条行军路线`;
+                const statusColor = new Color(50, 150, 255, 255); // 蓝色
+                
+                const item = this._createMarchingStatusItem(statusText, statusColor);
+                this.marchingStatusPanel.addChild(item);
+            });
+            
+            // 显示AI玩家的行军路线数量
+            aiPlayers.forEach(player => {
+                // 获取最新的行军路线数量（当前队列中的）
+                const count = this._troopManager!.getPlayerActivePathCount(player.id);
+                const statusText = `AI(${player.name}): ${count}条行军路线`;
+                const statusColor = new Color(255, 100, 100, 255); // 红色
+                
+                const item = this._createMarchingStatusItem(statusText, statusColor);
+                this.marchingStatusPanel.addChild(item);
+            });
+            
+            // 添加分隔行
+            if ((humanPlayers.length > 0 || aiPlayers.length > 0) && marchingPaths.length > 0) {
+                const item = this._createMarchingStatusItem("───────────", new Color(150, 150, 150, 255));
+                this.marchingStatusPanel.addChild(item);
+            }
+        }
+        
         // 如果没有行军路径，显示"无行军路线"
         if (marchingPaths.length === 0) {
             const item = this._createMarchingStatusItem("无行军路线", new Color(200, 200, 200, 255));
@@ -359,29 +503,30 @@ export class LocalGameController extends Component {
             let statusText: string;
             let statusColor: Color;
             
+            // 获取路径所属玩家名称
+            let playerName = `玩家${path.playerId}`;
+            if (this._playerManager) {
+                const player = this._playerManager.getPlayerById(path.playerId);
+                if (player) {
+                    playerName = player.name;
+                }
+            }
+            
             // 第一条显示为"执行中"，其余显示为"排队中"
             if (index === 0) {
                 const currentStep = path.currentStep + 1; // +1是为了显示为从1开始而不是0
                 const totalSteps = path.pathTiles.length; // 完整路径的总步数
-                statusText = `执行中: 行军路线 (${currentStep}/${totalSteps})`;
+                statusText = `${playerName} 执行中: (${currentStep}/${totalSteps})`;
                 statusColor = new Color(50, 200, 50, 255); // 绿色
             } else {
                 const totalSteps = path.pathTiles.length;
-                statusText = `排队中: 行军路线 (${totalSteps})`;
+                statusText = `${playerName} 排队中: (${index}/${marchingPaths.length})`;
                 statusColor = new Color(200, 150, 50, 255); // 橙色
             }
             
             const item = this._createMarchingStatusItem(statusText, statusColor);
             this.marchingStatusPanel.addChild(item);
         });
-        
-        // 确保布局更新
-        const layout = this.marchingStatusPanel.getComponent(Layout);
-        if (layout) {
-            // 手动触发布局更新
-            layout.enabled = false;
-            layout.enabled = true;
-        }
     }
     
     /**
@@ -557,14 +702,22 @@ export class LocalGameController extends Component {
     
     /**
      * 计算两点之间的最短路径（使用Dijkstra算法）
+     * 公开此方法以供AIManager等其他组件使用
      */
-    private _calculatePathBetweenPoints(start: Vec2, end: Vec2): Vec2[] {
+    calculatePathBetweenPoints(start: Vec2, end: Vec2): Vec2[] {
         console.log(`计算从 [${start.x},${start.y}] 到 [${end.x},${end.y}] 的最短路径`);
         
         if (!this._mapManager) return [start, end];
         
         // 如果两点相邻，直接返回
         if (Math.abs(start.x - end.x) + Math.abs(start.y - end.y) === 1) {
+            // 检查终点是否为不可到达的地形
+            const endTile = this._mapManager.getTile(end.x, end.y);
+            if (endTile && (endTile.terrainType === TerrainType.MOUNTAIN || 
+                            endTile.terrainType === TerrainType.LAKE)) {
+                console.log(`终点 [${end.x},${end.y}] 是不可到达的地形，无法生成路径`);
+                return [start]; // 只返回起点
+            }
             return [start, end];
         }
         
@@ -604,6 +757,15 @@ export class LocalGameController extends Component {
                 
                 // 检查是否在地图范围内且未访问过
                 if (newX >= 0 && newX < width && newY >= 0 && newY < height && !visited[newY][newX]) {
+                    // 检查是否是不可到达的地形
+                    const tile = this._mapManager.getTile(newX, newY);
+                    if (tile && (tile.terrainType === TerrainType.MOUNTAIN || 
+                                 tile.terrainType === TerrainType.LAKE)) {
+                        // 跳过不可到达的地形
+                        console.log(`跳过不可到达的地形 [${newX},${newY}]`);
+                        continue;
+                    }
+                    
                     // 标记为已访问
                     visited[newY][newX] = true;
                     
@@ -619,6 +781,15 @@ export class LocalGameController extends Component {
         // 如果没有找到路径，直接返回起点和终点
         if (!visited[end.y][end.x]) {
             console.log(`未找到从 [${start.x},${start.y}] 到 [${end.x},${end.y}] 的路径，使用直线连接`);
+            
+            // 检查终点是否为不可到达的地形
+            const endTile = this._mapManager.getTile(end.x, end.y);
+            if (endTile && (endTile.terrainType === TerrainType.MOUNTAIN || 
+                            endTile.terrainType === TerrainType.LAKE)) {
+                console.log(`终点 [${end.x},${end.y}] 是不可到达的地形，返回只有起点的路径`);
+                return [start]; // 只返回起点
+            }
+            
             return [start, end];
         }
         
@@ -633,6 +804,11 @@ export class LocalGameController extends Component {
         
         console.log(`找到路径，长度: ${path.length}`);
         return path;
+    }
+    
+    // 保留原来的方法但将其重定向到公共方法，确保向后兼容性
+    private _calculatePathBetweenPoints(start: Vec2, end: Vec2): Vec2[] {
+        return this.calculatePathBetweenPoints(start, end);
     }
     
     /**
@@ -1000,8 +1176,48 @@ export class LocalGameController extends Component {
         
         const player = this._playerManager.getPlayerById(playerId);
         if (player) {
-            console.log(`玩家${player.name}被击败了!`);
-            // 这里可以添加一些视觉效果或提示
+            console.log(`【大本营】玩家${player.name}(ID=${playerId})被击败，大本营已被占领`);
+            
+            // 判断是否为人类玩家（通过isAI属性判断，不假设固定ID）
+            if (!player.isAI) {
+                // 人类玩家被击败，游戏结束
+                this._gameOver = true;
+                this._timeManager?.pauseGame();
+                
+                console.log(`【大本营】用户大本营被攻陷，游戏失败`);
+                
+                // 获取游戏结束面板组件
+                const gameOverPanelComponent = this.gameOverPanel.getComponent(GameOverPanel);
+                if (!gameOverPanelComponent) return;
+                
+                // 显示失败画面
+                gameOverPanelComponent.showGameOver(false);
+            } else {
+                // 检查是否所有AI玩家都被击败了
+                const remainingAIPlayers = this._playerManager.getPlayers().filter(p => 
+                    p.isAI && !p.defeated
+                );
+                
+                console.log(`【大本营】检查游戏胜利条件: 剩余未击败AI敌人=${remainingAIPlayers.length}`);
+                
+                if (remainingAIPlayers.length === 0) {
+                    // 所有AI敌人都被击败，玩家获胜
+                    this._gameOver = true;
+                    this._timeManager?.pauseGame();
+                    
+                    // 计算AI玩家总数
+                    const allAIPlayers = this._playerManager.getPlayers().filter(p => p.isAI);
+                    
+                    console.log(`【大本营】所有敌方大本营已占领，游戏胜利，共消灭${allAIPlayers.length}个敌人`);
+                    
+                    // 获取游戏结束面板组件
+                    const gameOverPanelComponent = this.gameOverPanel.getComponent(GameOverPanel);
+                    if (!gameOverPanelComponent) return;
+                    
+                    // 显示胜利画面
+                    gameOverPanelComponent.showGameOver(true, allAIPlayers.length);
+                }
+            }
         }
     }
     
@@ -1016,8 +1232,32 @@ export class LocalGameController extends Component {
         
         const winner = this._playerManager.getPlayerById(winnerId);
         if (winner) {
-            console.log(`游戏结束! 胜利者: ${winner.name}`);
-            // 这里可以显示游戏结束画面
+            // 判断胜利条件
+            const isVictory = !winner.isAI;
+            
+            if (isVictory) {
+                console.log(`【大本营】游戏结束! 玩家${winner.name}(ID=${winner.id})胜利，所有敌方大本营已被占领`);
+            } else {
+                console.log(`【大本营】游戏结束! AI玩家${winner.name}(ID=${winner.id})胜利，用户大本营已被占领`);
+            }
+            
+            // 获取游戏结束面板组件
+            const gameOverPanelComponent = this.gameOverPanel.getComponent(GameOverPanel);
+            if (!gameOverPanelComponent) return;
+            
+            // 计算AI玩家数量
+            const allPlayers = this._playerManager.getPlayers();
+            const aiPlayers = allPlayers.filter(p => p.isAI);
+            
+            // 计算消灭的敌人数量（只有在玩家胜利时才需要）
+            let defeatedEnemies = 0;
+            if (isVictory) {
+                // 计算被击败的AI玩家数量
+                defeatedEnemies = aiPlayers.length;
+            }
+            
+            // 显示游戏结束面板
+            gameOverPanelComponent.showGameOver(isVictory, defeatedEnemies);
         }
     }
     
@@ -1159,22 +1399,120 @@ export class LocalGameController extends Component {
         if (Math.floor(gameTime) % 30 === 0) {
             // 这里可以实现游戏存档功能
         }
+
     }
     
     /**
      * 游戏主循环更新
      */
     update(dt: number) {
-        if (!this._gameStarted || this._gameOver) return;
-        
-        // 检查初始化状态
-        if (!this._mapManager || !this._playerManager || !this._timeManager || !this._troopManager) {
-            console.error("游戏组件未完全初始化");
+        if (!this._gameStarted || this._gameOver) {
             return;
         }
         
+        // 检查初始化状态
+        if (!this._mapManager || !this._playerManager || !this._timeManager || !this._troopManager || !this._aiManager) {
+            console.error("LocalGameController: 游戏组件未完全初始化，无法更新");
+            return;
+        }
+        
+        // 定期检查游戏结束条件（每秒一次）
+        const gameTime = Math.floor(this._timeManager.getGameTime());
+        if (gameTime % 3 === 0) {
+            this._checkGameEndCondition();
+        }
+        
+        // 调试信息
+        if (gameTime % 10 === 0) {
+            //console.log(`=== 游戏状态信息 ===`);
+            //console.log(`游戏时间: ${this._timeManager.getGameTime().toFixed(1)}秒`);
+            //console.log(`游戏速度: x${this._timeManager.getGameSpeed()}`);
+            
+            // 玩家状态
+            const players = this._playerManager.getPlayers();
+            //console.log(`玩家数量: ${players.length}`);
+            //players.forEach(player => {
+            //    const status = player.defeated ? "已击败" : "活跃中";
+            //    const aiInfo = player.isAI ? `(AI 难度:${player.aiLevel})` : "(人类)";
+            //    console.log(`- 玩家${player.id} ${player.name} ${aiInfo}: ${status}, 地块数:${player.ownedTiles.length}`);
+            //});
+        }
+        
+        // 调用时间管理器更新 - 这会触发AI逻辑和部队移动
+        this._timeManager.update(dt);
+        
         // 更新行军状态面板
         this._updateMarchingStatus();
+        
+        // 更新玩家状态面板（每秒更新一次）
+        if (Math.floor(this._timeManager.getGameTime()) % 1 === 0) {
+            this._updatePlayerStats();
+        }
+    }
+    
+    /**
+     * 检查游戏结束条件
+     */
+    private _checkGameEndCondition() {
+        if (!this._playerManager || !this._mapManager) return;
+        
+        // 检查每个玩家的大本营
+        let allAIDefeated = true;
+        let humanDefeated = true;
+        
+        // 找出人类玩家和AI玩家
+        const players = this._playerManager.getPlayers();
+        const humanPlayers = players.filter(p => !p.isAI);
+        const aiPlayers = players.filter(p => p.isAI);
+        
+        // 检查人类玩家状态
+        for (const player of humanPlayers) {
+            if (!player.headquarters) continue;
+            
+            const hqTile = this._mapManager.getTile(player.headquarters.x, player.headquarters.y);
+            if (hqTile && hqTile.ownerId === player.id) {
+                humanDefeated = false; // 至少有一个人类玩家大本营未被占领
+            }
+        }
+        
+        // 检查AI玩家状态
+        for (const player of aiPlayers) {
+            if (!player.headquarters) continue;
+            
+            const hqTile = this._mapManager.getTile(player.headquarters.x, player.headquarters.y);
+            if (hqTile && hqTile.ownerId === player.id) {
+                allAIDefeated = false; // 至少有一个AI玩家大本营未被占领
+            }
+        }
+        
+        // 输出调试信息（每3秒一次）
+        console.log(`【大本营】周期性检查: 所有AI被击败=${allAIDefeated}, 人类被击败=${humanDefeated}`);
+        
+        // 检查胜利条件
+        if (allAIDefeated && !humanDefeated) {
+            // 人类玩家胜利
+            console.log(`【大本营】检测到胜利条件：所有AI大本营被占领，人类玩家胜利`);
+            this._gameOver = true;
+            this._timeManager?.pauseGame();
+            
+            // 显示胜利画面
+            const gameOverPanelComponent = this.gameOverPanel.getComponent(GameOverPanel);
+            if (!gameOverPanelComponent) return;
+            
+            gameOverPanelComponent.showGameOver(true, aiPlayers.length);
+        } 
+        else if (humanDefeated) {
+            // 人类玩家失败
+            console.log(`【大本营】检测到失败条件：人类玩家大本营被占领，游戏失败`);
+            this._gameOver = true;
+            this._timeManager?.pauseGame();
+            
+            // 显示失败画面
+            const gameOverPanelComponent = this.gameOverPanel.getComponent(GameOverPanel);
+            if (!gameOverPanelComponent) return;
+            
+            gameOverPanelComponent.showGameOver(false);
+        }
     }
     
     /**
@@ -1203,6 +1541,185 @@ export class LocalGameController extends Component {
         layout.paddingRight = 10;
         layout.spacingY = 5;
         
-        console.log("LocalGameController: 行军状态面板初始化完成");
+        //console.log("LocalGameController: 行军状态面板初始化完成");
+    }
+
+    /**
+     * 更新所有玩家的拥有地块列表
+     */
+    private _updatePlayerOwnedTiles(): void {
+        //console.log("========== 开始更新玩家拥有地块列表 ==========");
+        
+        if (!this._mapManager || !this._playerManager) {
+            console.error("无法更新玩家拥有地块：管理器未初始化");
+            return;
+        }
+        
+        // 获取地图尺寸
+        const mapSize = this._mapManager.getMapSize();
+        
+        // 清空所有玩家的地块列表
+        const players = this._playerManager.getPlayers();
+        players.forEach(player => {
+            player.ownedTiles = [];
+            
+            // 重置行军路线计数
+            player.activePathCount = 0;
+        });
+        
+        // 遍历所有地块，将地块添加到对应玩家的列表中
+        for (let y = 0; y < mapSize.height; y++) {
+            for (let x = 0; x < mapSize.width; x++) {
+                const tile = this._mapManager.getTile(x, y);
+                if (tile && tile.ownerId !== -1) {
+                    const player = this._playerManager.getPlayerById(tile.ownerId);
+                    if (player) {
+                        player.addOwnedTile(new Vec2(x, y));
+                        //console.log(`将地块 [${x},${y}] 添加到玩家${player.id}的拥有列表，兵力=${tile.troops}`);
+                    }
+                }
+            }
+        }
+        
+        // 如果有部队管理器，重新计算每个玩家当前队列中的行军路线数量
+        if (this._troopManager) {
+            // 获取当前行军路径队列
+            const marchingPaths = this._troopManager.getMarchingPaths();
+            
+            // 根据当前队列重新计算每个玩家的行军路线数量
+            const pathCountByPlayer: {[playerId: number]: number} = {};
+            
+            // 对队列中的每条路径进行统计
+            marchingPaths.forEach(path => {
+                if (!pathCountByPlayer[path.playerId]) {
+                    pathCountByPlayer[path.playerId] = 0;
+                }
+                pathCountByPlayer[path.playerId]++;
+            });
+            
+            // 更新每个玩家的行军路线计数
+            players.forEach(player => {
+                player.activePathCount = pathCountByPlayer[player.id] || 0;
+                //console.log(`玩家${player.id}的当前队列中行军路线数量: ${player.activePathCount}`);
+            });
+        }
+        
+        // 打印更新后的统计信息
+        //players.forEach(player => {
+        //    console.log(`玩家${player.id} (${player.name}) 现在拥有 ${player.ownedTiles.length} 块地, ${player.activePathCount} 条行军路线`);
+        //});
+        
+        //console.log("========== 玩家拥有地块列表更新完成 ==========");
+    }
+
+    /**
+     * 创建玩家状态项
+     * @param player 玩家对象
+     * @returns 创建的状态项节点
+     */
+    private _createPlayerStatItem(player: any): Node {
+        // 实例化预制体
+        const item = instantiate(this.playerStatItemPrefab);
+        
+        // 获取Label组件
+        const itemLabel = item.getComponent(Label) || item.getComponentInChildren(Label);
+        if (itemLabel) {
+            // 计算玩家拥有的总兵力 - 直接查询地图上属于玩家的所有格子
+            let totalTroops = 0;
+            let tileCount = 0;
+            
+            if (this._mapManager) {
+                // 获取地图尺寸
+                const mapSize = this._mapManager.getMapSize();
+                
+                // 遍历所有地块
+                for (let y = 0; y < mapSize.height; y++) {
+                    for (let x = 0; x < mapSize.width; x++) {
+                        const tile = this._mapManager.getTile(x, y);
+                        // 检查地块是否存在且属于当前玩家
+                        if (tile && tile.ownerId === player.id) {
+                            tileCount++;
+                            totalTroops += tile.troops;
+                        }
+                    }
+                }
+            }
+            
+            // 设置文本内容
+            const playerType = player.isAI ? "AI" : "玩家";
+            itemLabel.string = `${player.name} (${playerType}): ${tileCount}地块, ${totalTroops}兵力`;
+            
+            // 设置文本颜色为玩家颜色
+            itemLabel.color = player.color;
+        }
+        
+        return item;
+    }
+    
+    /**
+     * 初始化玩家状态面板
+     */
+    private _initPlayerStatsPanel() {
+        if (!this.playerStatsPanel || !this.playerStatItemPrefab) {
+            console.error("LocalGameController: 玩家状态面板或预制体未设置，请在Inspector中指定playerStatsPanel和playerStatItemPrefab");
+            return;
+        }
+        
+        // 确保面板是空的
+        this.playerStatsPanel.removeAllChildren();
+        
+        // 设置面板样式
+        const layout = this.playerStatsPanel.getComponent(Layout) || this.playerStatsPanel.addComponent(Layout);
+        layout.type = Layout.Type.VERTICAL;
+        layout.resizeMode = Layout.ResizeMode.CONTAINER;
+        layout.paddingTop = 10;
+        layout.paddingBottom = 10;
+        layout.paddingLeft = 10;
+        layout.paddingRight = 10;
+        layout.spacingY = 5;
+        
+        // 添加标题
+        const titleItem = instantiate(this.playerStatItemPrefab);
+        const titleLabel = titleItem.getComponent(Label) || titleItem.getComponentInChildren(Label);
+        if (titleLabel) {
+            titleLabel.string = "玩家状态";
+            titleLabel.color = new Color(255, 255, 255, 255);
+            titleLabel.fontSize += 2; // 标题稍大一些
+            this.playerStatsPanel.addChild(titleItem);
+        }
+        
+        // 初始状态更新
+        this._updatePlayerStats();
+        
+        console.log("LocalGameController: 玩家状态面板初始化完成");
+    }
+    
+    /**
+     * 更新玩家状态面板
+     */
+    private _updatePlayerStats() {
+        if (!this.playerStatsPanel || !this.playerStatItemPrefab || !this._playerManager || !this._mapManager) {
+            return;
+        }
+        
+        // 先更新玩家拥有地块列表，确保数据准确
+        this._updatePlayerOwnedTiles();
+        
+        // 保留标题，移除其他子节点
+        const children = this.playerStatsPanel.children.slice();
+        for (let i = 1; i < children.length; i++) { // 从索引1开始，保留标题
+            children[i].removeFromParent();
+        }
+        
+        // 获取所有玩家
+        const players = this._playerManager.getPlayers();
+        
+        // 为每个玩家创建状态项
+        players.forEach(player => {
+            if (!player.defeated) { // 只显示未被击败的玩家
+                const item = this._createPlayerStatItem(player);
+                this.playerStatsPanel.addChild(item);
+            }
+        });
     }
 } 

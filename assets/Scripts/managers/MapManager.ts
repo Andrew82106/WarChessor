@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, instantiate, Prefab, Vec2, resources, JsonAsset, Vec3, UITransform, view, Layout } from 'cc';
+import { _decorator, Component, Node, instantiate, Prefab, Vec2, resources, JsonAsset, Vec3, UITransform, view, Layout, director } from 'cc';
 import { TileComponent } from '../components/TileComponent';
 import { LevelData, MapData, TerrainType } from '../models/MapData';
 import { PlayerManager } from './PlayerManager';
@@ -103,6 +103,17 @@ export class MapManager extends Component {
                 
                 // 记录加载成功的日志，便于调试
                 console.log(`成功加载关卡数据: ${level.name}, 地图大小: ${this._mapWidth}x${this._mapHeight}`);
+                
+                // 在初始化地图或加载关卡时添加
+                console.log("地图初始化开始：检查玩家初始地块分配");
+                // 打印每个地块的初始所有权
+                level.mapData.ownership.forEach((tileRow, y) => {
+                    tileRow.forEach((tile, x) => {
+                        if (tile !== -1) {
+                            console.log(`初始地块 [${x},${y}] 分配给玩家${tile}, 兵力=${level.mapData.troops[y][x]}, 类型=${level.mapData.terrain[y][x]}`);
+                        }
+                    });
+                });
                 
                 resolve(level);
             });
@@ -328,36 +339,88 @@ export class MapManager extends Component {
     }
     
     /**
-     * 更新格子所有权
+     * 更新地块所有权
+     * @param x 格子X坐标
+     * @param y 格子Y坐标
+     * @param ownerId 新的所有者ID
      */
     updateTileOwnership(x: number, y: number, ownerId: number): void {
         const tile = this.getTile(x, y);
-        if (!tile) return;
+        if (!tile) {
+            console.error(`无法更新地块所有权：坐标[${x},${y}]上没有地块`);
+            return;
+        }
         
-        // 更新格子所有者
-        tile.ownerId = ownerId;
+        const oldOwnerId = tile.ownerId;
+        console.log(`地块所有权变更：[${x},${y}] 从玩家${oldOwnerId} -> 玩家${ownerId}`);
         
-        // 更新玩家拥有的地块列表
-        if (this._playerManager) {
-            // 如果之前有所有者，从原所有者的列表中移除
-            if (tile.ownerId !== -1 && tile.ownerId !== ownerId) {
-                const oldOwner = this._playerManager.getPlayerById(tile.ownerId);
-                if (oldOwner) {
-                    oldOwner.removeOwnedTile(new Vec2(x, y));
-                }
-            }
-            
-            // 如果新所有者不是-1，添加到新所有者的列表中
-            if (ownerId !== -1) {
-                const newOwner = this._playerManager.getPlayerById(ownerId);
-                if (newOwner) {
-                    newOwner.addOwnedTile(new Vec2(x, y));
-                }
+        // 从旧拥有者的地块列表中移除
+        if (oldOwnerId !== -1 && this._playerManager) {
+            const oldOwner = this._playerManager.getPlayerById(oldOwnerId);
+            if (oldOwner) {
+                oldOwner.removeOwnedTile(new Vec2(x, y));
             }
         }
         
-        // 更新视野
-        this.updateVisibility();
+        // 更新地块所有权
+        tile.ownerId = ownerId;
+        
+        // 添加到新拥有者的地块列表
+        if (ownerId !== -1 && this._playerManager) {
+            const newOwner = this._playerManager.getPlayerById(ownerId);
+            if (newOwner) {
+                newOwner.addOwnedTile(new Vec2(x, y));
+            }
+        }
+        
+        // 更新地块显示
+        const tileComponent = tile.getComponent(TileComponent);
+        if (tileComponent) {
+            tileComponent.ownerId = ownerId;
+        }
+        
+        // 触发地块所有权变更事件
+        this.node.emit('tile-ownership-changed', { x, y, oldOwnerId, newOwnerId: ownerId });
+        
+        // 检查大本营状况
+        this.checkHeadquartersStatus(x, y, ownerId, oldOwnerId);
+    }
+    
+    /**
+     * 检查大本营状况，判断游戏是否结束
+     */
+    private checkHeadquartersStatus(x: number, y: number, newOwnerId: number, oldOwnerId: number): void {
+        if (!this._playerManager) return;
+        
+        const tile = this.getTile(x, y);
+        if (!tile || tile.terrainType !== TerrainType.HEADQUARTERS) return;
+        
+        console.log(`【大本营】检测到大本营位置[${x},${y}]所有权变更: 从玩家${oldOwnerId}变为玩家${newOwnerId}`);
+        
+        // 如果是大本营，检查它是否是某个玩家的
+        let headquarters = false;
+        this._playerManager.getPlayers().forEach(player => {
+            if (player.headquarters && player.headquarters.x === x && player.headquarters.y === y) {
+                headquarters = true;
+                console.log(`【大本营】确认位置[${x},${y}]是玩家${player.id}(${player.name})的大本营`);
+                
+                // 如果大本营被其他玩家占领，标记玩家为已击败
+                if (player.id !== newOwnerId) {
+                    console.log(`【大本营】玩家${player.id}(${player.name})的大本营被玩家${newOwnerId}占领，该玩家被击败`);
+                    player.defeated = true;
+                    
+                    // 通知玩家被击败事件
+                    this.node.emit('player-defeated', player.id);
+                    
+                    // 检查游戏胜利条件
+                    const winnerId = this._playerManager.checkWinCondition();
+                    if (winnerId !== -1) {
+                        console.log(`【大本营】检测到游戏结束条件，胜利者ID: ${winnerId}`);
+                        this.node.emit('game-over', winnerId);
+                    }
+                }
+            }
+        });
     }
     
     /**

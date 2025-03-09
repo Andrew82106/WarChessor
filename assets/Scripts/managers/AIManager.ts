@@ -13,6 +13,9 @@ const { ccclass, property } = _decorator;
  */
 @ccclass('AIManager')
 export class AIManager extends Component {
+    @property
+    maxAIPathLimit: number = 5; // AI玩家在队列中的最大行军路径数量限制
+    
     // 引用其他管理器
     private _mapManager: MapManager | null = null;
     private _playerManager: PlayerManager | null = null;
@@ -31,51 +34,44 @@ export class AIManager extends Component {
     }
     
     /**
-     * 处理AI行动
-     */
-    handleAIAction(aiPlayer: Player): void {
-        if (!this._mapManager || !this._playerManager || !this._troopManager) return;
-        
-        // 根据AI难度级别执行不同策略
-        switch (aiPlayer.aiLevel) {
-            case 1: // 简单
-                this.executeEasyAIStrategy(aiPlayer);
-                break;
-            case 2: // 中等
-                this.executeMediumAIStrategy(aiPlayer);
-                break;
-            case 3: // 困难
-                this.executeHardAIStrategy(aiPlayer);
-                break;
-            default:
-                this.executeEasyAIStrategy(aiPlayer);
-                break;
-        }
-    }
-    
-    /**
      * 实时处理AI逻辑
      * 根据时间增量更新AI决策
      * @param deltaTime 时间增量（秒）
      */
     processAILogic(deltaTime: number): void {
-        if (!this._mapManager || !this._playerManager || !this._troopManager) return;
+        if (!this._mapManager || !this._playerManager || !this._troopManager) {
+            console.warn("AIManager: processAILogic - 管理器未初始化，无法处理AI逻辑");
+            return;
+        }
+        
+        // 获取所有AI玩家
+        const aiPlayers = this._playerManager.getPlayers().filter(player => player.isAI && !player.defeated);
+        //console.log(`AIManager: 处理AI逻辑 - 找到 ${aiPlayers.length} 个AI玩家，deltaTime=${deltaTime.toFixed(3)}`);
+        
+        if (aiPlayers.length === 0) {
+            // console.log("AIManager: 没有活跃的AI玩家");
+            return;
+        }
         
         // 更新每个AI玩家的决策计时器
-        const aiPlayers = this._playerManager.getPlayers().filter(player => player.isAI && !player.defeated);
-        
         aiPlayers.forEach(aiPlayer => {
-            // 更新AI决策计时器
-            if (!aiPlayer.decisionTimer) {
+            // 确保AI决策计时器已初始化
+            if (aiPlayer.decisionTimer === undefined || aiPlayer.decisionTimer === null) {
                 aiPlayer.decisionTimer = this._getDecisionInterval(aiPlayer.aiLevel || 1);
+                //console.log(`AIManager: 初始化AI玩家 ${aiPlayer.id} 的决策计时器为 ${aiPlayer.decisionTimer.toFixed(2)}秒`);
             }
             
+            // 更新决策计时器
+            const oldTimer = aiPlayer.decisionTimer;
             aiPlayer.decisionTimer -= deltaTime;
             
             // 当计时器归零时，执行AI决策
             if (aiPlayer.decisionTimer <= 0) {
+                //console.log(`AIManager: AI玩家 ${aiPlayer.id} (${aiPlayer.name}) 准备执行决策`);
+                
                 // 重置计时器
                 aiPlayer.decisionTimer = this._getDecisionInterval(aiPlayer.aiLevel || 1);
+                ////console.log(`AIManager: 重置AI玩家 ${aiPlayer.id} 的决策计时器为 ${aiPlayer.decisionTimer.toFixed(2)}秒`);
                 
                 // 执行AI行动
                 this.handleAIAction(aiPlayer);
@@ -89,15 +85,119 @@ export class AIManager extends Component {
      * @returns 决策间隔时间（秒）
      */
     private _getDecisionInterval(aiLevel: number): number {
+        let interval: number;
         switch (aiLevel) {
             case 1: // 简单 - 较长决策间隔（3-5秒）
-                return 3 + Math.random() * 2;
+                interval = 3 + Math.random() * 2;
+                break;
             case 2: // 中等 - 中等决策间隔（2-3秒）
-                return 2 + Math.random();
+                interval = 2 + Math.random();
+                break;
             case 3: // 困难 - 较短决策间隔（1-2秒）
-                return 1 + Math.random();
+                interval = 1 + Math.random();
+                break;
             default:
-                return 3;
+                interval = 3;
+                break;
+        }
+        //console.log(`AIManager: AI难度${aiLevel}的决策间隔为${interval.toFixed(2)}秒`);
+        return interval;
+    }
+    
+    /**
+     * 处理AI行动
+     */
+    handleAIAction(aiPlayer: Player): void {
+        if (!this._mapManager || !this._playerManager || !this._troopManager) {
+            console.error("AIManager: handleAIAction - 管理器未初始化，无法执行AI行动");
+            return;
+        }
+        
+        //console.log(`========== AIManager: 执行AI玩家 ${aiPlayer.id} (${aiPlayer.name}) 行动 ==========`);
+        //console.log(`AI难度等级: ${aiPlayer.aiLevel || 1}, 拥有地块数: ${aiPlayer.ownedTiles.length}`);
+        
+        // 检查AI当前在队列中的行军路径数量
+        const currentPathCount = this._troopManager.getPlayerActivePathCount(aiPlayer.id);
+        //console.log(`AIManager: AI玩家 ${aiPlayer.id} 当前有 ${currentPathCount} 条行军路径在队列中`);
+        
+        // 如果AI已有的行军路径数量超过限制，暂时跳过决策
+        if (currentPathCount >= this.maxAIPathLimit) {
+            //console.log(`AIManager: AI玩家 ${aiPlayer.id} 行军路径数已达上限(${currentPathCount}/${this.maxAIPathLimit})，暂停决策`);
+            return;
+        }
+        
+        // 如果AI没有地块，则跳过
+        if (aiPlayer.ownedTiles.length === 0) {
+            console.warn(`AIManager: AI玩家 ${aiPlayer.id} 没有地块，跳过行动`);
+            
+            // 打印所有地块情况
+            //console.log("地图所有地块拥有情况:");
+            const mapSize = this._mapManager.getMapSize();
+            let tileCount = 0;
+            
+            for (let y = 0; y < mapSize.height; y++) {
+                for (let x = 0; x < mapSize.width; x++) {
+                    const tile = this._mapManager.getTile(x, y);
+                    if (tile && tile.ownerId !== -1) {
+                        tileCount++;
+                        //console.log(`地块 [${x},${y}] 归属于玩家${tile.ownerId}, 兵力=${tile.troops}`);
+                    }
+                }
+            }
+            
+            //console.log(`地图上共有 ${tileCount} 块已归属地块`);
+            
+            // 输出临时修复信息
+            //console.log("尝试修复AI没有地块的问题...");
+            const players = this._playerManager.getPlayers();
+            players.forEach(player => {
+                //console.log(`重新扫描玩家${player.id}的地块...`);
+                player.ownedTiles = [];
+                
+                for (let y = 0; y < mapSize.height; y++) {
+                    for (let x = 0; x < mapSize.width; x++) {
+                        const tile = this._mapManager!.getTile(x, y);
+                        if (tile && tile.ownerId === player.id) {
+                            player.addOwnedTile(new Vec2(x, y));
+                            //console.log(`向玩家${player.id}添加地块[${x},${y}]`);
+                        }
+                    }
+                }
+                
+                //console.log(`更新后玩家${player.id}拥有 ${player.ownedTiles.length} 块地`);
+            });
+            
+            if (aiPlayer.ownedTiles.length === 0) {
+                //console.log("修复后AI仍然没有地块，放弃执行AI行动");
+                return;
+            } else {
+                //console.log(`修复成功! AI玩家现在拥有 ${aiPlayer.ownedTiles.length} 块地，继续执行行动`);
+            }
+        }
+        
+        // 根据AI难度级别执行不同策略
+        try {
+            switch (aiPlayer.aiLevel) {
+                case 1: // 简单
+                    //console.log(`AIManager: 执行简单AI策略 (玩家${aiPlayer.id})`);
+                    this.executeEasyAIStrategy(aiPlayer);
+                    break;
+                case 2: // 中等
+                    //console.log(`AIManager: 执行中等AI策略 (玩家${aiPlayer.id})`);
+                    this.executeMediumAIStrategy(aiPlayer);
+                    break;
+                case 3: // 困难
+                    //console.log(`AIManager: 执行困难AI策略 (玩家${aiPlayer.id})`);
+                    this.executeHardAIStrategy(aiPlayer);
+                    break;
+                default:
+                    //console.log(`AIManager: 执行默认(简单)AI策略 (玩家${aiPlayer.id})`);
+                    this.executeEasyAIStrategy(aiPlayer);
+                    break;
+            }
+            //console.log(`AIManager: AI玩家 ${aiPlayer.id} 行动执行完成`);
+        } catch (error) {
+            console.error(`AIManager: 执行AI行动时发生错误:`, error);
         }
     }
     
@@ -106,38 +206,122 @@ export class AIManager extends Component {
      * 简单AI: 防守型，兵力分散，随机选择目标
      */
     private executeEasyAIStrategy(aiPlayer: Player): void {
-        if (!this._mapManager || !this._playerManager || !this._troopManager) return;
+        if (!this._mapManager || !this._playerManager || !this._troopManager) {
+            console.error("AIManager: executeEasyAIStrategy - 管理器未初始化");
+            return;
+        }
+        
+        //console.log(`AIManager: 执行简单AI策略 - 玩家${aiPlayer.id}(${aiPlayer.name})`);
         
         // 获取AI拥有的所有格子
         const ownedTiles = aiPlayer.ownedTiles;
+        //console.log(`AIManager: 玩家${aiPlayer.id}拥有${ownedTiles.length}块地`);
+        
+        // 记录派遣次数和当前路径数量
+        let dispatchCount = 0;
+        const currentPathCount = this._troopManager.getPlayerActivePathCount(aiPlayer.id);
+        const remainingPathSlots = this.maxAIPathLimit - currentPathCount;
+        
+        //console.log(`AIManager: 当前路径数${currentPathCount}，最大限制${this.maxAIPathLimit}，剩余可派遣次数${remainingPathSlots}`);
+        
+        // 如果已经达到上限，直接返回
+        if (remainingPathSlots <= 0) {
+            //console.log(`AIManager: 已达到路径数量上限，跳过派遣`);
+            return;
+        }
         
         // 按照随机顺序遍历拥有的格子
-        this.shuffleArray(ownedTiles).forEach(tilePos => {
+        const shuffledTiles = this.shuffleArray([...ownedTiles]);
+        //console.log(`AIManager: 已随机打乱${shuffledTiles.length}块地准备检查`);
+        
+        shuffledTiles.forEach((tilePos, index) => {
+            // 如果已经派遣达到剩余槽位数量，停止
+            if (dispatchCount >= remainingPathSlots) {
+                //console.log(`AIManager: 已达到剩余可派遣次数(${remainingPathSlots})，停止派遣`);
+                return;
+            }
+            
+            // 如果已经派遣了3次，停止
+            if (dispatchCount >= 3) {
+                //console.log(`AIManager: 已达到简单AI最大派遣次数(3)，停止派遣`);
+                return;
+            }
+            
             const tile = this._mapManager!.getTile(tilePos.x, tilePos.y);
-            if (!tile || tile.ownerId !== aiPlayer.id) return;
+            if (!tile) {
+                console.warn(`AIManager: 无法获取格子 [${tilePos.x},${tilePos.y}]`);
+                return;
+            }
+            
+            if (tile.ownerId !== aiPlayer.id) {
+                console.warn(`AIManager: 格子 [${tilePos.x},${tilePos.y}] 不属于AI玩家${aiPlayer.id}，实际所有者: ${tile.ownerId}`);
+                return;
+            }
+            
+            // 记录检查的格子信息
+            //console.log(`AIManager: 检查格子 [${tilePos.x},${tilePos.y}], 序号: ${index+1}/${shuffledTiles.length}, 当前兵力: ${tile.troops}`);
             
             // 只为拥有至少2个兵力的格子创建行军路径
-            if (tile.troops < 2) return;
+            if (tile.troops < 2) {
+                //console.log(`AIManager: 格子 [${tilePos.x},${tilePos.y}] 兵力不足，跳过 (${tile.troops} < 2)`);
+                return;
+            }
             
             // 计算可分配的兵力（保留一半守备）
             const troops = Math.floor(tile.troops / 2);
-            if (troops < 1) return;
+            if (troops < 1) {
+                //console.log(`AIManager: 格子 [${tilePos.x},${tilePos.y}] 可派遣兵力不足，跳过 (${troops} < 1)`);
+                return;
+            }
             
             // 获取周围一圈的格子
             const surroundingTiles = this.getSurroundingTiles(tilePos, 1);
+            //console.log(`AIManager: 格子 [${tilePos.x},${tilePos.y}] 周围有 ${surroundingTiles.length} 个相邻格子`);
+            
+            if (surroundingTiles.length === 0) {
+                //console.log(`AIManager: 格子 [${tilePos.x},${tilePos.y}] 周围没有可用格子，跳过`);
+                return;
+            }
             
             // 随机选择一个周围的格子
-            const targetTiles = this.shuffleArray(surroundingTiles).slice(0, 1);
-            if (targetTiles.length === 0) return;
+            const targetTiles = this.shuffleArray([...surroundingTiles]).slice(0, 1);
+            if (targetTiles.length === 0) {
+                //console.log(`AIManager: 无法选择目标格子，跳过`);
+                return;
+            }
             
-            // 创建行军路径
-            this._troopManager!.createMarchingPath(
-                aiPlayer.id,
-                tilePos,
-                targetTiles,
-                troops
-            );
+            const targetPos = targetTiles[0];
+            //console.log(`AIManager: 选择目标格子 [${targetPos.x},${targetPos.y}]`);
+            
+            const targetTile = this._mapManager.getTile(targetPos.x, targetPos.y);
+            if (targetTile) {
+                //console.log(`AIManager: 目标格子状态 - 所有者: ${targetTile.ownerId}, 兵力: ${targetTile.troops}`);
+            }
+            
+            // 尝试创建行军路径
+            //console.log(`AIManager: 尝试从 [${tilePos.x},${tilePos.y}] 派遣 ${troops} 兵力到 [${targetPos.x},${targetPos.y}]`);
+            
+            try {
+                // 创建行军路径
+                const success = this._troopManager!.createMarchingPath(
+                    aiPlayer.id,
+                    tilePos,
+                    targetTiles,
+                    troops
+                );
+                
+                if (success) {
+                    //console.log(`AIManager: 成功创建行军路径! 从 [${tilePos.x},${tilePos.y}] 到 [${targetPos.x},${targetPos.y}], 兵力: ${troops}`);
+                    dispatchCount++;
+                } else {
+                    console.warn(`AIManager: 创建行军路径失败`);
+                }
+            } catch (error) {
+                console.error(`AIManager: 创建行军路径时发生错误:`, error);
+            }
         });
+        
+        //console.log(`AIManager: 玩家${aiPlayer.id}的简单AI策略执行完成，共派遣${dispatchCount}次`);
     }
     
     /**
@@ -147,8 +331,24 @@ export class AIManager extends Component {
     private executeMediumAIStrategy(aiPlayer: Player): void {
         if (!this._mapManager || !this._playerManager || !this._troopManager) return;
         
+        //console.log(`AIManager: 执行中等AI策略 - 玩家${aiPlayer.id}`);
+        
         // 获取AI拥有的所有格子
         const ownedTiles = aiPlayer.ownedTiles;
+        //console.log(`AIManager: 玩家${aiPlayer.id}拥有${ownedTiles.length}块地`);
+        
+        // 记录派遣次数和当前路径数量
+        let dispatchCount = 0;
+        const currentPathCount = this._troopManager.getPlayerActivePathCount(aiPlayer.id);
+        const remainingPathSlots = this.maxAIPathLimit - currentPathCount;
+        
+        //console.log(`AIManager: 当前路径数${currentPathCount}，最大限制${this.maxAIPathLimit}，剩余可派遣次数${remainingPathSlots}`);
+        
+        // 如果已经达到上限，直接返回
+        if (remainingPathSlots <= 0) {
+            //console.log(`AIManager: 已达到路径数量上限，跳过派遣`);
+            return;
+        }
         
         // 计算AI总兵力和平均兵力
         let totalTroops = 0;
@@ -163,6 +363,18 @@ export class AIManager extends Component {
         
         // 按照随机顺序遍历拥有的格子
         this.shuffleArray(ownedTiles).forEach(tilePos => {
+            // 如果已经派遣达到剩余槽位数量，停止
+            if (dispatchCount >= remainingPathSlots) {
+                //console.log(`AIManager: 已达到剩余可派遣次数(${remainingPathSlots})，停止派遣`);
+                return;
+            }
+            
+            // 中等AI最多派遣5条路径
+            if (dispatchCount >= 5) {
+                //console.log(`AIManager: 已达到中等AI最大派遣次数(5)，停止派遣`);
+                return;
+            }
+            
             const tile = this._mapManager!.getTile(tilePos.x, tilePos.y);
             if (!tile || tile.ownerId !== aiPlayer.id) return;
             
@@ -190,6 +402,9 @@ export class AIManager extends Component {
                 targetTiles,
                 troops
             );
+            
+            // 增加派遣计数
+            dispatchCount++;
         });
     }
     
@@ -200,8 +415,24 @@ export class AIManager extends Component {
     private executeHardAIStrategy(aiPlayer: Player): void {
         if (!this._mapManager || !this._playerManager || !this._troopManager) return;
         
+        //console.log(`AIManager: 执行困难AI策略 - 玩家${aiPlayer.id}`);
+        
         // 获取AI拥有的所有格子
         const ownedTiles = aiPlayer.ownedTiles;
+        //console.log(`AIManager: 玩家${aiPlayer.id}拥有${ownedTiles.length}块地`);
+        
+        // 记录派遣次数和当前路径数量
+        let dispatchCount = 0;
+        const currentPathCount = this._troopManager.getPlayerActivePathCount(aiPlayer.id);
+        const remainingPathSlots = this.maxAIPathLimit - currentPathCount;
+        
+        //console.log(`AIManager: 当前路径数${currentPathCount}，最大限制${this.maxAIPathLimit}，剩余可派遣次数${remainingPathSlots}`);
+        
+        // 如果已经达到上限，直接返回
+        if (remainingPathSlots <= 0) {
+            //console.log(`AIManager: 已达到路径数量上限，跳过派遣`);
+            return;
+        }
         
         // 寻找敌人的政治中心和人口重镇
         const strategicTargets = this.findStrategicTargets(aiPlayer.id);
@@ -215,6 +446,18 @@ export class AIManager extends Component {
         
         // 处理每个拥有的格子
         sortedTiles.forEach(tilePos => {
+            // 如果已经派遣达到剩余槽位数量，停止
+            if (dispatchCount >= remainingPathSlots) {
+                //console.log(`AIManager: 已达到剩余可派遣次数(${remainingPathSlots})，停止派遣`);
+                return;
+            }
+            
+            // 困难AI最多派遣8条路径
+            if (dispatchCount >= 8) {
+                //console.log(`AIManager: 已达到困难AI最大派遣次数(8)，停止派遣`);
+                return;
+            }
+            
             const tile = this._mapManager!.getTile(tilePos.x, tilePos.y);
             if (!tile || tile.ownerId !== aiPlayer.id) return;
             
@@ -259,6 +502,9 @@ export class AIManager extends Component {
                 targetTiles,
                 troops
             );
+            
+            // 增加派遣计数
+            dispatchCount++;
         });
     }
     
@@ -416,9 +662,63 @@ export class AIManager extends Component {
     }
     
     /**
-     * 找到通往目标的路径（简单实现，不是最短路径）
+     * 找到通往目标的路径（使用LocalGameController中的寻路算法）
      */
     private findPathToTarget(source: Vec2, target: Vec2): Vec2[] {
+        //console.log(`AI寻路: 寻找从 [${source.x},${source.y}] 到 [${target.x},${target.y}] 的路径`);
+        
+        // 检查目标是否为不可到达的地形
+        if (this._mapManager) {
+            const targetTile = this._mapManager.getTile(target.x, target.y);
+            if (targetTile && (targetTile.terrainType === TerrainType.MOUNTAIN || 
+                              targetTile.terrainType === TerrainType.LAKE)) {
+                //console.log(`AI寻路: 目标 [${target.x},${target.y}] 是不可到达的地形，取消寻路`);
+                return []; // 返回空路径
+            }
+        }
+        
+        // 获取LocalGameController实例来使用其寻路算法
+        const scene = this.node.parent;
+        if (!scene) {
+            console.error("AI寻路: 无法获取场景引用");
+            return this.findPathToTargetFallback(source, target); // 使用备用算法
+        }
+        
+        // 尝试获取LocalGameController组件，使用any类型避免TypeScript错误
+        const localGameController = scene.getComponent('LocalGameController') as any;
+        if (!localGameController) {
+            console.error("AI寻路: 无法获取LocalGameController引用");
+            return this.findPathToTargetFallback(source, target); // 使用备用算法
+        }
+        
+        // 调用LocalGameController的公共路径计算方法
+        if (typeof localGameController.calculatePathBetweenPoints === 'function') {
+            try {
+                const path = localGameController.calculatePathBetweenPoints(source, target);
+                //console.log(`AI寻路: 使用LocalGameController的算法找到路径，长度: ${path.length}`);
+                
+                // 移除起点，因为在创建行军路径时会添加
+                if (path.length > 1) {
+                    const pathWithoutStart = path.slice(1);
+                    return pathWithoutStart;
+                }
+                return [];
+            } catch (error) {
+                console.error("AI寻路: 使用LocalGameController的算法计算路径失败:", error);
+                return this.findPathToTargetFallback(source, target); // 使用备用算法
+            }
+        } else {
+            console.error("AI寻路: LocalGameController中找不到calculatePathBetweenPoints方法");
+            return this.findPathToTargetFallback(source, target); // 使用备用算法
+        }
+    }
+    
+    /**
+     * 备用寻路算法（简单实现，在无法使用主算法时使用）
+     */
+    private findPathToTargetFallback(source: Vec2, target: Vec2): Vec2[] {
+        //console.log(`AI寻路: 使用备用算法寻找从 [${source.x},${source.y}] 到 [${target.x},${target.y}] 的路径`);
+        
         // 这里使用简单的直线路径，可以替换为A*等寻路算法
         const path: Vec2[] = [];
         
@@ -440,6 +740,40 @@ export class AIManager extends Component {
         for (let i = 0; i < steps; i++) {
             if (Math.abs(x - target.x) > 0) x += stepX;
             if (Math.abs(y - target.y) > 0) y += stepY;
+            
+            // 检查当前点是否是不可到达的地形
+            if (this._mapManager) {
+                const tile = this._mapManager.getTile(x, y);
+                if (tile && (tile.terrainType === TerrainType.MOUNTAIN || 
+                             tile.terrainType === TerrainType.LAKE)) {
+                    //console.log(`AI寻路: 路径点 [${x},${y}] 是不可到达的地形，寻找备选路径`);
+                    
+                    // 简单的避开障碍策略：尝试绕行一格
+                    const alternativePoints = [
+                        { x: x + (stepY !== 0 ? 1 : 0), y: y + (stepX !== 0 ? 1 : 0) },
+                        { x: x - (stepY !== 0 ? 1 : 0), y: y - (stepX !== 0 ? 1 : 0) }
+                    ];
+                    
+                    let foundAlternative = false;
+                    for (const point of alternativePoints) {
+                        const altTile = this._mapManager.getTile(point.x, point.y);
+                        if (altTile && !(altTile.terrainType === TerrainType.MOUNTAIN || 
+                                         altTile.terrainType === TerrainType.LAKE)) {
+                            // 找到可通行的替代点
+                            x = point.x;
+                            y = point.y;
+                            foundAlternative = true;
+                            //console.log(`AI寻路: 找到备选路径点 [${x},${y}]`);
+                            break;
+                        }
+                    }
+                    
+                    if (!foundAlternative) {
+                        //console.log(`AI寻路: 无法找到备选路径，路径终止`);
+                        break; // 无法继续寻路，结束
+                    }
+                }
+            }
             
             path.push(new Vec2(x, y));
         }
@@ -492,7 +826,7 @@ export class AIManager extends Component {
             return;
         }
         
-        console.log(`AI玩家 ${playerId} 开始执行回合`);
+        //console.log(`AI玩家 ${playerId} 开始执行回合`);
         
         // 获取AI难度
         const player = this._playerManager.getPlayerById(playerId);
@@ -502,16 +836,16 @@ export class AIManager extends Component {
         }
         
         const difficulty = player.aiLevel ? this.getDifficultyString(player.aiLevel) : "normal";
-        console.log(`AI难度: ${difficulty}`);
+        //console.log(`AI难度: ${difficulty}`);
         
         // 获取AI所有的地块
         const ownedTiles = this.getPlayerOwnedTiles(playerId);
         if (ownedTiles.length === 0) {
-            console.log("AI没有拥有的地块，无法行动");
+            //console.log("AI没有拥有的地块，无法行动");
             return;
         }
         
-        console.log(`AI拥有 ${ownedTiles.length} 个地块`);
+        //console.log(`AI拥有 ${ownedTiles.length} 个地块`);
         
         // 对每个有足够兵力的地块尝试行动
         let actionCount = 0;
@@ -535,14 +869,14 @@ export class AIManager extends Component {
             const targetPos = targetTiles[0];
             const troopsToSend = this.calculateTroopsToSend(tile.troops, difficulty);
             
-            console.log(`AI决定从 [${tilePos.x},${tilePos.y}] 派遣 ${troopsToSend} 兵力到 [${targetPos.x},${targetPos.y}]`);
+            //console.log(`AI决定从 [${tilePos.x},${tilePos.y}] 派遣 ${troopsToSend} 兵力到 [${targetPos.x},${targetPos.y}]`);
             
             // 执行调兵行动
             this._troopManager.sendTroops(tilePos.x, tilePos.y, targetPos.x, targetPos.y, troopsToSend);
             actionCount++;
         }
         
-        console.log(`AI玩家 ${playerId} 执行了 ${actionCount} 次行动，回合结束`);
+        //console.log(`AI玩家 ${playerId} 执行了 ${actionCount} 次行动，回合结束`);
     }
     
     /**
