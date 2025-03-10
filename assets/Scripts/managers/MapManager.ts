@@ -18,7 +18,7 @@ export class MapManager extends Component {
     mapContainer: Node = null!;
     
     @property
-    tileSize: number = 50;
+    tileSize: number = 80;// Tile大小在这里改才有用
     
     @property
     tileGap: number = 1;

@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Label, Button, Vec2, Prefab, instantiate, Color, Camera, director, Layout, UIOpacity } from 'cc';
+import { _decorator, Component, Node, Label, Button, AudioSource, Vec2, Prefab, instantiate, Color, Camera, director, Layout, UIOpacity } from 'cc';
 import { MapManager } from './managers/MapManager';
 import { PlayerManager } from './managers/PlayerManager';
 import { TimeManager } from './managers/TimeManager';
@@ -60,6 +60,9 @@ export class LocalGameController extends Component {
     
     @property(Node)
     gameOverPanel: Node = null!;  // 游戏结束面板
+
+    @property(AudioSource)
+    dispatchButtonClickSound: AudioSource = null!;
     
     // 各个管理器引用
     private _mapManager: MapManager | null = null;
@@ -466,31 +469,6 @@ export class LocalGameController extends Component {
     }
     
     /**
-     * 增加AI路径限制
-     */
-    private _increaseAIPathLimit() {
-        if (!this._aiManager) return;
-        
-        this._aiManager.maxAIPathLimit++;
-        console.log(`AI路径限制增加到 ${this._aiManager.maxAIPathLimit}`);
-        this._updateAIPathLimitUI();
-    }
-    
-    /**
-     * 减少AI路径限制
-     */
-    private _decreaseAIPathLimit() {
-        if (!this._aiManager) return;
-        
-        // 确保不小于1
-        if (this._aiManager.maxAIPathLimit > 1) {
-            this._aiManager.maxAIPathLimit--;
-            console.log(`AI路径限制减少到 ${this._aiManager.maxAIPathLimit}`);
-        }
-        this._updateAIPathLimitUI();
-    }
-    
-    /**
      * 创建行军状态项并设置文本
      * @param text 显示文本
      * @param color 文本颜色
@@ -674,22 +652,63 @@ export class LocalGameController extends Component {
         
         // 选中自己的格子
         if (tile.ownerId === currentPlayerId) {
+            // 如果已经选择了一个己方格子，并且点击了另一个己方格子，检查是否相邻
+            if (this._selectedTile && this._selectedTile.ownerId === currentPlayerId) {
+                // 检查两个格子是否相邻
+                const isAdjacent = this._targetTiles.some(pos => 
+                    pos.x === tile.gridPosition.x && pos.y === tile.gridPosition.y);
+                
+                if (isAdjacent) {
+                    // 它们相邻，执行派遣操作
+                    const availableTroops = this._selectedTile.troops - 1;
+                    this._troopsToSend = Math.floor(availableTroops / 2) > 0 ? Math.floor(availableTroops / 2) : 0;
+                    
+                    // 派遣兵力到目标格子
+                    if (this._troopsToSend > 0 && this._troopManager) {
+                        console.log(`派遣 ${this._troopsToSend} 兵力从 [${this._selectedTile.gridPosition.x},${this._selectedTile.gridPosition.y}] 到 [${tile.gridPosition.x},${tile.gridPosition.y}]`);
+                        
+                        this._troopManager.sendTroops(
+                            this._selectedTile.gridPosition.x, 
+                            this._selectedTile.gridPosition.y,
+                            tile.gridPosition.x,
+                            tile.gridPosition.y,
+                            this._troopsToSend
+                        );
+                    }
+                    
+                    // 短暂高亮目标格子
+                    tile.setHighlight(true);
+                    
+                    // 清除选择状态
+                    this._selectedTile = null;
+                    this._targetTiles = [];
+                    this._troopsToSend = 0;
+                    this._updateDispatchButton();
+                    
+                    // 清除高亮显示
+                    this._clearHighlights();
+                    return;
+                }
+            }
+            
+            // 普通的选择自己的格子逻辑
             this._selectedTile = tile;
             this._targetTiles = this._mapManager.getAdjacentTiles(tile.gridPosition.x, tile.gridPosition.y);
             
             // 高亮显示可移动目标
             this._highlightTargetTiles();
             
-            console.log(`选中己方格子 [${tile.gridPosition.x},${tile.gridPosition.y}], 兵力: ${tile.troops}`);
+            console.log(`in LocalGameController 选中己方格子 [${tile.gridPosition.x},${tile.gridPosition.y}], 兵力: ${tile.troops}`);
             
             // 选择派遣兵力数量
             if (tile.troops > 1) {
                 // 默认派遣一半兵力
                 this._troopsToSend = Math.floor(tile.troops / 2);
+                console.log(`in LocalGameController 选中己方格子 [${tile.gridPosition.x},${tile.gridPosition.y}], 兵力: ${tile.troops}, 准备派遣兵力: ${this._troopsToSend}`);
                 // 更新派遣按钮状态
                 this._updateDispatchButton();
             } else {
-                console.log(`格子兵力不足，无法派遣`);
+                console.log(`in LocalGameController 格子兵力不足，无法派遣`);
                 this._troopsToSend = 0;
                 this._updateDispatchButton();
             }
@@ -698,9 +717,10 @@ export class LocalGameController extends Component {
         else if (this._selectedTile && this._targetTiles.some(pos => 
             pos.x === tile.gridPosition.x && pos.y === tile.gridPosition.y)) {
             
-            // 计算派遣兵力 - 尽可能多地派遣，只在原地留1个
+            // 计算派遣兵力 - 使用一半兵力，而不是全部
             const availableTroops = this._selectedTile.troops - 1;
-            this._troopsToSend = availableTroops > 0 ? availableTroops : 0;
+            // 默认派遣一半兵力
+            this._troopsToSend = Math.floor(availableTroops / 2) > 0 ? Math.floor(availableTroops / 2) : 0;
             
             // 派遣兵力到目标格子
             if (this._troopsToSend > 0 && this._troopManager) {
@@ -1228,35 +1248,6 @@ export class LocalGameController extends Component {
     }
     
     /**
-     * 回合更新事件处理
-     */
-    private _onTurnUpdated(turnNumber: number) {
-        // 更新UI
-        this._updateUI();
-    }
-    
-    /**
-     * 玩家切换事件处理
-     */
-    private _onPlayerSwitched(player: any) {
-        // 更新UI
-        this._updateUI();
-        
-        // 重置选择状态
-        if (this._selectedTile) {
-            this._selectedTile.isSelected = false;
-            this._selectedTile = null;
-        }
-        this._targetTiles = [];
-        
-        // 如果当前玩家是AI，则执行AI行动
-        if (player.isAI && this._aiManager) {
-            console.log(`执行AI玩家 ${player.name} 的行动`);
-            this._aiManager.performAITurn(player.id);
-        }
-    }
-    
-    /**
      * 玩家被击败事件处理
      */
     private _onPlayerDefeated(playerId: number) {
@@ -1355,6 +1346,9 @@ export class LocalGameController extends Component {
     private _onSpeedUpTurnButtonClicked() {
         if (!this._gameStarted || this._gameOver || !this._timeManager) return;
         
+        // 播放速度按钮点击音效
+        this.dispatchButtonClickSound.play();
+
         // 在实时模式下，此按钮可用于切换游戏速度
         const currentSpeed = this._timeManager.getGameSpeed();
         const newSpeed = currentSpeed >= 4 ? 1 : currentSpeed * 2;
@@ -1370,6 +1364,8 @@ export class LocalGameController extends Component {
     private _onDispatchButtonClicked() {
         console.log("in LocalGameController: 派遣按钮被点击");
         console.log(`当前派遣模式状态: ${this._isInDispatchMode}`);
+        // 播放派遣按钮点击音效
+        this.dispatchButtonClickSound.play();
         
         if (!this._gameStarted || this._gameOver) {
             console.log("in LocalGameController: 游戏未开始或已结束，忽略点击");
