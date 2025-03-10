@@ -87,7 +87,7 @@ export class TileComponent extends Component {
      */
     onLoad() {
         // 初始化
-        console.log(`TileComponent: 加载格子 [${this._gridPosition.x},${this._gridPosition.y}]`);
+        // console.log(`TileComponent: 加载格子 [${this._gridPosition.x},${this._gridPosition.y}]`);
         
         // 确保精灵帧正确加载
         if (this.background) {
@@ -116,12 +116,13 @@ export class TileComponent extends Component {
         this._isMarkedForMove = false;
         
         // 强制关闭战争迷雾
-        if (this.fogNode) {
-            this.fogNode.active = false;
-        }
+        //if (this.fogNode) {
+        //    this.fogNode.active = false;
+        //}
         
         // 设置字体颜色
         if (this.troopsLabel) {
+            console.log(`in TileComponent onLoad function, Tile [${this._gridPosition.x},${this._gridPosition.y}]，设置字体颜色为白色`);
             this.troopsLabel.color = new Color(255, 255, 255, 255); // 白色文字
         }
         
@@ -173,7 +174,7 @@ export class TileComponent extends Component {
         
         // 仅当所有者改变时更新显示
         if (oldId !== id) {
-            console.log(`Tile [${this._gridPosition.x},${this._gridPosition.y}] 所有者从 ${oldId} 变为 ${id}`);
+            // console.log(`Tile [${this._gridPosition.x},${this._gridPosition.y}] 所有者从 ${oldId} 变为 ${id}`);
             this.updateOwnerDisplay();
         }
     }
@@ -274,6 +275,7 @@ export class TileComponent extends Component {
      * 更新所有者显示
      */
     private updateOwnerDisplay() {
+        console.log(`in TileComponent updateOwnerDisplay function, Tile [${this._gridPosition.x},${this._gridPosition.y}] 更新所有者显示`);
         if (!this.background) {
             console.error(`Tile [${this._gridPosition.x},${this._gridPosition.y}] 背景组件为空`);
             return;
@@ -318,9 +320,11 @@ export class TileComponent extends Component {
                 const player = playerManager.getPlayerById(this._ownerId);
                 if (player) {
                     const playerColor = player.color;
-                    
+                    console.log(`in TileComponent updateOwnerDisplay function, Tile [${this._gridPosition.x},${this._gridPosition.y}] 获取玩家颜色`);
                     // 对于大本营，直接使用玩家颜色（金色边框会在节点结构中添加）
+                    console.log(`in TileComponent updateOwnerDisplay function, 地形类型为：${this._terrainType}`);
                     if (this._isHeadquarters) {
+                        console.log(`in TileComponent updateOwnerDisplay function, Tile [${this._gridPosition.x},${this._gridPosition.x}]，大本营，直接使用玩家颜色`);
                         // 将背景设置为金色
                         finalColor.r = 255; // 金色
                         finalColor.g = 215;
@@ -331,6 +335,7 @@ export class TileComponent extends Component {
                         
                         // 更新数字标签为玩家颜色
                         if (this.troopsLabel) {
+                            console.log(`in TileComponent updateOwnerDisplay function, Tile [${this._gridPosition.x},${this._gridPosition.y}]，更新数字标签为玩家颜色 ${playerColor}`);
                             this.troopsLabel.color = new Color(
                                 playerColor.r,
                                 playerColor.g,
@@ -342,7 +347,7 @@ export class TileComponent extends Component {
                         // 混合地形颜色和玩家颜色
                         // 为特殊地形保留更多原始颜色
                         let blendFactor = 0.6; // 默认混合比例：60%玩家颜色
-                        
+                        console.log(`in TileComponent updateOwnerDisplay function, Tile [${this._gridPosition.x},${this._gridPosition.y}]，混合地形颜色和玩家颜色，混合比例为：${blendFactor}`);
                         if (this._terrainType !== TerrainType.BASIC_LAND) {
                             // 特殊地形使用较低的混合比例
                             blendFactor = 0.3; // 特殊地形：30%玩家颜色
@@ -353,6 +358,7 @@ export class TileComponent extends Component {
                         finalColor.g = Math.max(0, Math.min(255, Math.round(terrainColor.g * (1 - blendFactor) + playerColor.g * blendFactor)));
                         finalColor.b = Math.max(0, Math.min(255, Math.round(terrainColor.b * (1 - blendFactor) + playerColor.b * blendFactor)));
                     }
+                    console.log(`in TileComponent updateOwnerDisplay function, Tile [${this._gridPosition.x},${this._gridPosition.y}]，获取到玩家颜色为：${finalColor}`);
                 } else {
                     console.warn(`找不到ID为${this._ownerId}的玩家，使用原始地形颜色, 位置: [${this._gridPosition.x},${this._gridPosition.y}]`);
                     
@@ -380,39 +386,7 @@ export class TileComponent extends Component {
         this.background.color = finalColor;
     }
     
-    /**
-     * 更新大本营金色边框
-     * @param show 是否显示金色边框
-     */
-    public updateHeadquartersBorder(show: boolean): void {
-        console.log(`【大本营】格子[${this._gridPosition.x},${this._gridPosition.y}]${show ? '显示' : '隐藏'}金色边框`);
-        
-        // 查找或创建边框节点
-        let borderNode = this.node.getChildByName('GoldenBorder');
-        
-        if (!borderNode && show) {
-            // 创建金色边框节点
-            borderNode = new Node('GoldenBorder');
-            this.node.addChild(borderNode);
-            
-            // 添加Sprite组件
-            const sprite = borderNode.addComponent(Sprite);
-            
-            // 大小略大于背景
-            borderNode.setScale(1.1, 1.1);
-            
-            // 设置z索引使其在背景下方但在其他元素上方
-            borderNode.setSiblingIndex(1);
-            
-            // 设置金色
-            sprite.color = new Color(255, 215, 0, 255); // 金色
-            console.log(`【大本营】为格子[${this._gridPosition.x},${this._gridPosition.y}]创建了新的金色边框`);
-        }
-        
-        if (borderNode) {
-            borderNode.active = show;
-        }
-    }
+    
     
     /**
      * 记录节点层次结构，用于调试
@@ -469,7 +443,8 @@ export class TileComponent extends Component {
     /**
      * 更新兵力显示
      */
-    private updateTroopsDisplay() {
+    public updateTroopsDisplay() {
+        // console.log(`Tile [${this._gridPosition.x},${this._gridPosition.y}] 更新兵力显示`);
         if (!this.troopsLabel) {
             console.error(`Tile [${this._gridPosition.x},${this._gridPosition.y}] 兵力标签为空`);
             return;
@@ -478,6 +453,7 @@ export class TileComponent extends Component {
         // 不可到达的地形（山脉/湖泊）不显示兵力
         if (this._isImpassable) {
             this.troopsLabel.node.active = false;
+            console.log(`Tile [${this._gridPosition.x},${this._gridPosition.y}] 兵力标签为空`);
             return;
         }
         
@@ -488,17 +464,18 @@ export class TileComponent extends Component {
         this.troopsLabel.node.active = true;
         
         // 根据兵力数量设置文本颜色
-        if (this._troops === 0) {
-            this.troopsLabel.color = new Color(100, 100, 100, 255); // 灰色文本
-        } else {
-            this.troopsLabel.color = new Color(255, 255, 255, 255); // 白色文本
-        }
+        // if (this._troops === 0) {
+        //     this.troopsLabel.color = new Color(100, 100, 100, 255); // 灰色文本
+        // } else {
+        //     this.troopsLabel.color = new Color(255, 255, 255, 255); // 白色文本
+        // }
     }
     
     /**
      * 更新可见性
      */
     private updateVisibility() {
+        // console.log(`Tile [${this._gridPosition.x},${this._gridPosition.y}] 更新可见性`);
         if (this.fogNode) {
             this.fogNode.active = !this._isVisible;
             const fogSprite = this.fogNode.getComponent(Sprite);

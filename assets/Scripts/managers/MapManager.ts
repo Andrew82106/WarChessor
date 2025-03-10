@@ -18,7 +18,7 @@ export class MapManager extends Component {
     mapContainer: Node = null!;
     
     @property
-    tileSize: number = 60;
+    tileSize: number = 50;
     
     @property
     tileGap: number = 1;
@@ -199,8 +199,9 @@ export class MapManager extends Component {
             layout.enabled = false;
         }
         const containerSize = this.mapContainer.getComponent(UITransform).contentSize;
-        const tileSize = Math.min(containerSize.width / this._mapWidth, containerSize.height / this._mapHeight);
-        
+        // const tileSize = Math.min(containerSize.width / this._mapWidth, containerSize.height / this._mapHeight);
+        const tileSize = this.tileSize;
+        console.log(`创建地图网格，地图尺寸: ${this._mapWidth}x${this._mapHeight}, 瓷砖尺寸: ${tileSize}`);
         // 计算有效瓷砖尺寸，包括间隙
         const effectiveTileSize = tileSize + this.tileGap;
         const mapWidth = this._mapWidth * effectiveTileSize;
@@ -228,19 +229,15 @@ export class MapManager extends Component {
         for (let y = 0; y < this._mapHeight; y++) {
             for (let x = 0; x < this._mapWidth; x++) {
                 // 实例化格子预制体并添加到地图容器
-                //console.log("in MapManager createMapGrid function, going to instantiate tile prefab");
                 const tileNode = instantiate(this.tilePrefab); 
                 // 实例化格子预制体，这里会调用TileComponent的onLoad函数
                 this.mapContainer.addChild(tileNode);
-                //console.log("tileNode added to mapContainer");
                 
                 // 计算格子位置，使地图居中显示
                 const posX = startX + x * effectiveTileSize;
                 const posY = startY - y * effectiveTileSize;
                 
-                //console.log("in MapManager createMapGrid function, going to set tileNode position");
                 tileNode.setPosition(posX, posY, 0);
-                //console.log("tileNode position set");
                 
                 // 设置格子组件并应用基本属性及地图数据
                 const tile = tileNode.getComponent(TileComponent);
@@ -252,37 +249,30 @@ export class MapManager extends Component {
                     // 从地图数据中应用地形类型
                     if (this._mapData.terrain && this._mapData.terrain[y] && this._mapData.terrain[y][x] !== undefined) {
                         tile.terrainType = this._mapData.terrain[y][x];
+                        console.log(`in MapManager createMapGrid function, Tile [${x},${y}]，地形类型为：${tile.terrainType}`);
                     }
                     // 从地图数据中应用所有权
                     if (this._mapData.ownership && this._mapData.ownership[y] && this._mapData.ownership[y][x] !== undefined) {
                         const ownerId = this._mapData.ownership[y][x];
                         tile.ownerId = ownerId;
                         // 这里设置了ownerId，会调用TileComponent的updateOwnerDisplay函数
-                        //console.log(`设置 Tile [${x},${y}] 的所有者ID为: ${ownerId}`);
                     }
-                    //console.log("ownership applied");
                     // 从地图数据中应用兵力
                     if (this._mapData.troops && this._mapData.troops[y] && this._mapData.troops[y][x] !== undefined) {
                         tile.troops = this._mapData.troops[y][x];
-                        //console.log(`设置 Tile [${x},${y}] 的兵力为: ${tile.troops}`);
                     }
-                    //console.log("troops applied");
                     // 检查背景组件是否存在
                     if (!tile.background) {
                         console.error(`Tile [${x},${y}] 背景组件不存在!`);
                     }
-                    //console.log("background component checked");
+                    tile.updateTroopsDisplay();
+                    // 必须在这里调用这个函数，否则在TileComponent中不会调用，不可到达的点还会显示兵力
                 }
                 
                 // 调整节点层级，确保格子按顺序绘制
                 tileNode.setSiblingIndex(y * this._mapWidth + x);
             }
         }
-        
-        // 添加额外调试信息，输出地图格子总数及地图容器的相关信息
-        // console.log(`in MapManager createMapGrid function, 创建了 ${this._mapWidth * this._mapHeight} 个Tile`);
-        // console.log(`in MapManager createMapGrid function, 地图容器节点层级: ${this.mapContainer.getSiblingIndex()}`);
-        // console.log(`in MapManager createMapGrid function, 地图容器世界坐标: ${this.mapContainer.worldPosition}`);
     }
     
     /**

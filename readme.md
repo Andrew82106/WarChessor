@@ -43,6 +43,17 @@
   - **troops**: 驻军数量矩阵，表示每个格子上驻扎的兵力数量。
   - **headquarters**: 大本营位置数组，包含每个玩家的大本营坐标，格式为 [玩家ID, x, y]。
 
+```ts
+export enum TerrainType {
+    BASIC_LAND = 0,        // 基本土地
+    POPULATION_CENTER = 1, // 人口重镇
+    POLITICAL_CENTER = 2,  // 政治中心
+    HEADQUARTERS = 3,       // 大本营
+    MOUNTAIN = 4,          // 高山（不可通行）
+    LAKE = 5               // 湖泊（不可通行）
+}
+```
+
 - **players**: 关卡中的玩家信息数组，每个玩家包含以下字段：
   - **id**: 玩家唯一标识符。
   - **name**: 玩家名称。

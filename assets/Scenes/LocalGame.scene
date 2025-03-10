@@ -347,8 +347,8 @@
     "__prefab": null,
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 123.32219786953243,
-      "height": 50.4
+      "width": 123.34299486736919,
+      "height": 50.40000000000001
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -380,7 +380,7 @@
     "_string": "时间: 0秒",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 31.078125,
+    "_actualFontSize": 35.833333333333336,
     "_fontSize": 30,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
@@ -479,8 +479,8 @@
     "__prefab": null,
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 81.68758248491704,
-      "height": 50.4
+      "width": 81.70132375317951,
+      "height": 50.40000000000001
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -512,7 +512,7 @@
     "_string": "player",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 31.078125,
+    "_actualFontSize": 35.833333333333336,
     "_fontSize": 30,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
@@ -699,7 +699,7 @@
     "_string": "速度 x1",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 20.71875,
+    "_actualFontSize": 23.88888888888889,
     "_fontSize": 20,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
@@ -1011,7 +1011,7 @@
     "_string": "派遣",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 20.71875,
+    "_actualFontSize": 23.88888888888889,
     "_fontSize": 20,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
@@ -1235,8 +1235,8 @@
     "__prefab": null,
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 42.237992552790345,
-      "height": 50.4
+      "width": 42.240106626998546,
+      "height": 50.400000000000006
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -1268,7 +1268,7 @@
     "_string": "label",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 20.71875,
+    "_actualFontSize": 23.88888888888889,
     "_fontSize": 20,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
@@ -1681,8 +1681,8 @@
       "__type__": "cc.Color",
       "r": 255,
       "g": 255,
-      "b": 255,
-      "a": 255
+      "b": 0,
+      "a": 51
     },
     "_spriteFrame": {
       "__uuid__": "a5905cc6-328e-4a98-a973-616a0a5a6769@f9941",
@@ -1763,8 +1763,8 @@
     "__prefab": null,
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 131.123046875,
-      "height": 50.4
+      "width": 131.07420171693315,
+      "height": 50.400000000000006
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -1796,7 +1796,7 @@
     "_string": "共消灭0个敌人",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 20,
+    "_actualFontSize": 23.88888888888889,
     "_fontSize": 20,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
@@ -1895,8 +1895,8 @@
     "__prefab": null,
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 60,
-      "height": 50.4
+      "width": 59.97764835801235,
+      "height": 50.400000000000006
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -1920,15 +1920,15 @@
     "_dstBlendFactor": 4,
     "_color": {
       "__type__": "cc.Color",
-      "r": 255,
-      "g": 255,
-      "b": 255,
+      "r": 253,
+      "g": 253,
+      "b": 253,
       "a": 255
     },
     "_string": "成功！",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 20,
+    "_actualFontSize": 23.88888888888889,
     "_fontSize": 20,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
@@ -2115,7 +2115,7 @@
     "_string": "返回",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 20,
+    "_actualFontSize": 23.88888888888889,
     "_fontSize": 20,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
@@ -2375,7 +2375,7 @@
     "_priority": 0,
     "_fov": 45,
     "_fovAxis": 0,
-    "_orthoHeight": 544.4343891402715,
+    "_orthoHeight": 360,
     "_near": 0,
     "_far": 2000,
     "_color": {
